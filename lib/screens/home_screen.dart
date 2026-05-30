@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../core/constants/app_assets.dart';
 import '../core/constants/app_constants.dart';
-import '../core/constants/app_nav_icons.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeTabContent extends StatelessWidget {
   final String userName;
   final String accountType;
   final int activeEvents;
@@ -17,7 +16,7 @@ class HomeScreen extends StatelessWidget {
   final int quotaUsed;
   final int quotaTotal;
 
-  const HomeScreen({
+  const HomeTabContent({
     super.key,
     this.userName = 'Amani',
     this.accountType = 'premium',
@@ -32,113 +31,112 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final plan = _AccountPlan.from(accountType);
 
-    return Scaffold(
-      backgroundColor: AppColors.blancCasse,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DashboardHeader(plan: plan),
-                  const SizedBox(height: AppSpacing.lg),
-                  _AccountBanner(plan: plan, quotaUsed: quotaUsed, quotaTotal: quotaTotal),
-                  const SizedBox(height: AppSpacing.lg),
-                  _WelcomeCard(userName: userName),
-                  const SizedBox(height: AppSpacing.lg),
-                  _StatsSection(
-                    activeEvents: activeEvents,
-                    guestsConfirmed: guestsConfirmed,
-                    invitesDispatched: invitesDispatched,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _QuotaCard(used: quotaUsed, total: quotaTotal, plan: plan),
-                  const SizedBox(height: AppSpacing.lg),
-                  const _EventListSection(),
-                ],
-              ),
+    return Material(
+      color: AppColors.blancCasse,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _AccountBanner(plan: plan, quotaUsed: quotaUsed, quotaTotal: quotaTotal),
+                const SizedBox(height: AppSpacing.lg),
+                // TODO: décommenter lors de l'intégration backend
+                // if (userPlan != 'premium')
+                const _SubscriptionUpgradeBanner(),
+                const SizedBox(height: AppSpacing.lg),
+                _WelcomeCard(userName: userName),
+                const SizedBox(height: AppSpacing.lg),
+                _StatsSection(
+                  activeEvents: activeEvents,
+                  guestsConfirmed: guestsConfirmed,
+                  invitesDispatched: invitesDispatched,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _QuotaCard(used: quotaUsed, total: quotaTotal, plan: plan),
+                const SizedBox(height: AppSpacing.lg),
+                const _EventListSection(),
+              ],
             ),
           ),
         ),
       ),
-      bottomNavigationBar: const _CustomNavBar(),
     );
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
-  final _AccountPlan plan;
-
-  const _DashboardHeader({required this.plan});
+class _SubscriptionUpgradeBanner extends StatelessWidget {
+  const _SubscriptionUpgradeBanner();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Image.asset(AppAssets.logoFull, height: AppSpacing.xxl, fit: BoxFit.contain),
-        const Spacer(),
-        _AccountStatusPill(plan: plan),
-        const SizedBox(width: AppSpacing.sm),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.notifications_none_rounded),
-          color: AppColors.violetRoyal,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.blancCasse,
-            side: BorderSide(color: AppColors.violetRoyal.withValues(alpha: 0.12)),
+    return InkWell(
+      onTap: () => Navigator.of(context).pushNamed('/subscription'),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.violetRoyal.withValues(alpha: 0.82),
+              AppColors.orAfricain.withValues(alpha: 0.82),
+            ],
+            begin: AppColors.gradientPrincipal.begin,
+            end: AppColors.gradientPrincipal.end,
           ),
+          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-      ],
+        child: Row(
+          children: [
+            const Icon(Icons.bolt_rounded, color: AppColors.blancCasse, size: AppSpacing.lg),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                "Vous utilisez 2/3 événements — Passez à Essentiel pour l'illimité",
+                style: AppTypography.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.blancCasse,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            TextButton(
+              onPressed: () => Navigator.of(context).pushNamed('/subscription'),
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.blancCasse,
+                foregroundColor: AppColors.violetRoyal,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                minimumSize: const Size(0, AppSpacing.xl),
+              ),
+              child: const Text('Voir les offres'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _AccountStatusPill extends StatelessWidget {
-  final _AccountPlan plan;
-
-  const _AccountStatusPill({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.beigeCremeBase,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        border: Border.all(color: plan.color),
-        boxShadow: [
-          BoxShadow(
-            color: plan.color.withValues(alpha: 0.14),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(plan.icon, color: AppColors.noirDoux, size: AppSpacing.lg),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            plan.label,
-            style: AppTypography.textTheme.labelLarge?.copyWith(
-              color: AppColors.noirDoux,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class HomeScreen extends HomeTabContent {
+  const HomeScreen({
+    super.key,
+    super.userName,
+    super.accountType,
+    super.activeEvents,
+    super.guestsConfirmed,
+    super.invitesDispatched,
+    super.quotaUsed,
+    super.quotaTotal,
+  });
 }
 
 class _AccountBanner extends StatelessWidget {
@@ -654,36 +652,6 @@ class _MiniQuotaProgress extends StatelessWidget {
   }
 }
 
-class _CustomNavBar extends StatelessWidget {
-  const _CustomNavBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: 0,
-      backgroundColor: AppColors.blancCasse,
-      elevation: 0,
-      selectedItemColor: AppColors.violetRoyal,
-      unselectedItemColor: AppColors.noirDoux.withValues(alpha: 0.72),
-      selectedLabelStyle: AppTypography.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
-      unselectedLabelStyle: AppTypography.textTheme.bodySmall,
-      showUnselectedLabels: true,
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(AppNavIcons.home), label: 'Accueil'),
-        BottomNavigationBarItem(icon: Icon(AppNavIcons.events), label: 'Événements'),
-        BottomNavigationBarItem(icon: Icon(AppNavIcons.guests), label: 'Invités'),
-        BottomNavigationBarItem(icon: Icon(AppNavIcons.profile), label: 'Profil'),
-      ],
-      onTap: (index) {
-        if (index == 1) {
-          Navigator.pushNamed(context, '/create-event');
-        }
-      },
-    );
-  }
-}
-
 class _AccountPlan {
   final String label;
   final String description;
@@ -761,13 +729,33 @@ class _EventListItem {
 }
 
 enum _EventStatus {
-  upcoming('À venir', AppColors.blancCasse, AppColors.warning),
-  running('En cours', AppColors.blancCasse, AppColors.violetRoyal),
-  done('Terminé', AppColors.blancCasse, AppColors.success);
+  upcoming('À venir'),
+  running('En cours'),
+  done('Terminé');
 
   final String label;
-  final Color foregroundColor;
-  final Color backgroundColor;
 
-  const _EventStatus(this.label, this.foregroundColor, this.backgroundColor);
+  const _EventStatus(this.label);
+
+  Color get backgroundColor {
+    switch (this) {
+      case _EventStatus.upcoming:
+        return AppColors.info.withValues(alpha: 0.12);
+      case _EventStatus.running:
+        return AppColors.warning.withValues(alpha: 0.12);
+      case _EventStatus.done:
+        return AppColors.success.withValues(alpha: 0.12);
+    }
+  }
+
+  Color get foregroundColor {
+    switch (this) {
+      case _EventStatus.upcoming:
+        return AppColors.info;
+      case _EventStatus.running:
+        return AppColors.warning;
+      case _EventStatus.done:
+        return AppColors.success;
+    }
+  }
 }
