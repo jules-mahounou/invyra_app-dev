@@ -1,20 +1,119 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/auth/auth_error_message.dart';
+import '../core/config/supabase_config.dart';
 import '../core/constants/app_assets.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? flashMessage;
+
+  const LoginScreen({super.key, this.flashMessage});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
   bool rememberMe = false;
   bool obscure = true;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final message = widget.flashMessage;
+    if (message != null && message.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.violetRoyal,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+          ),
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signInWithEmail() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Veuillez renseigner votre email et votre mot de passe.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      Navigator.pushReplacementNamed(context, '/home');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _errorMessage = authErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : SupabaseConfig.authRedirectUrl,
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _errorMessage = authErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,65 +146,84 @@ class _LoginScreenState extends State<LoginScreen> {
                         fit: BoxFit.contain,
                       ),
                     ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Connexion',
-                        style: AppTypography.textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.noirDoux,
-                        ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Connexion',
+                      style: AppTypography.textTheme.displayMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.noirDoux,
                       ),
-                      Container(
-                        margin: const EdgeInsets.only(top: 4, bottom: 28),
-                        height: 3,
-                        width: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.orAfricain,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 4, bottom: 28),
+                      height: 3,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.orAfricain,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-
-                      Text('Email', style: AppTypography.textTheme.bodyMedium),
-                      const SizedBox(height: 6),
-                      _buildTextField(hint: 'demo@email.com', icon: Icons.email_outlined),
-                      const SizedBox(height: 20),
-
-                      Text('Mot de passe', style: AppTypography.textTheme.bodyMedium),
-                      const SizedBox(height: 6),
-                      _buildTextField(
-                        hint: 'Entrez votre mot de passe',
-                        icon: Icons.lock_outline,
-                        isPassword: true,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Transform.scale(
-                            scale: 0.9,
-                            child: Checkbox(
-                              value: rememberMe,
-                              onChanged: (v) => setState(() => rememberMe = v ?? false),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4)),
-                              activeColor: AppColors.orAfricain,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    Text('Email', style: AppTypography.textTheme.bodyMedium),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _emailController,
+                      hint: 'demo@email.com',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Mot de passe', style: AppTypography.textTheme.bodyMedium),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _passwordController,
+                      hint: 'Entrez votre mot de passe',
+                      icon: Icons.lock_outline,
+                      isPassword: true,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Transform.scale(
+                          scale: 0.9,
+                          child: Checkbox(
+                            value: rememberMe,
+                            onChanged: _isLoading
+                                ? null
+                                : (v) => setState(() => rememberMe = v ?? false),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
                             ),
+                            activeColor: AppColors.orAfricain,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          Text('Se souvenir de moi', style: AppTypography.textTheme.bodySmall),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                                foregroundColor: AppColors.orAfricain,
-                                padding: EdgeInsets.zero),
-                            child: const Text('Mot de passe oublié ?'),
+                        ),
+                        Text('Se souvenir de moi', style: AppTypography.textTheme.bodySmall),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: _isLoading ? null : () {},
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.orAfricain,
+                            padding: EdgeInsets.zero,
                           ),
-                        ],
+                          child: const Text('Mot de passe oublié ?'),
+                        ),
+                      ],
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _errorMessage!,
+                        style: AppTypography.textTheme.bodySmall?.copyWith(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(height: 28),
-
-                      GestureDetector(
-                        onTap: () => Navigator.pushReplacementNamed(context, '/home'),
+                    ],
+                    const SizedBox(height: 28),
+                    GestureDetector(
+                      onTap: _isLoading ? null : _signInWithEmail,
+                      child: Opacity(
+                        opacity: _isLoading ? 0.6 : 1,
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -118,45 +236,55 @@ class _LoginScreenState extends State<LoginScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           alignment: Alignment.center,
-                          child: const Text(
-                            'Se connecter',
-                            style: TextStyle(
-                              color: AppColors.blancCasse,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.blancCasse,
+                                  ),
+                                )
+                              : const Text(
+                                  'Se connecter',
+                                  style: TextStyle(
+                                    color: AppColors.blancCasse,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildGoogleButton(),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("Vous n'avez pas de compte ?", style: AppTypography.textTheme.bodySmall),
+                        GestureDetector(
+                          onTap: _isLoading
+                              ? null
+                              : () => Navigator.pushNamed(context, '/signup'),
+                          child: Text(
+                            'Créer un compte',
+                            style: AppTypography.textTheme.bodySmall?.copyWith(
+                              color: AppColors.orAfricain,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildGoogleButton(),
-                      const SizedBox(height: 18),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text("Vous n'avez pas de compte ?",
-                              style: AppTypography.textTheme.bodySmall),
-                          GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, '/signup'),
-                            child: Text(
-                              'Créer un compte',
-                              style: AppTypography.textTheme.bodySmall?.copyWith(
-                                color: AppColors.orAfricain,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildGoogleButton() {
@@ -168,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
         border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.12)),
       ),
       child: TextButton.icon(
-        onPressed: () {},
+        onPressed: _isLoading ? null : _signInWithGoogle,
         icon: Image.asset(
           AppAssets.googleLogo,
           width: 20,
@@ -186,12 +314,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildTextField({
+    required TextEditingController controller,
     required String hint,
     required IconData icon,
     bool isPassword = false,
+    TextInputType? keyboardType,
   }) {
     return TextField(
+      controller: controller,
+      enabled: !_isLoading,
       obscureText: isPassword ? obscure : false,
+      keyboardType: keyboardType,
+      onChanged: (_) {
+        if (_errorMessage != null) {
+          setState(() => _errorMessage = null);
+        }
+      },
       decoration: InputDecoration(
         prefixIcon: Icon(icon, size: 20, color: AppColors.noirDoux.withValues(alpha: 0.55)),
         hintText: hint,
@@ -238,14 +376,20 @@ class _FullScreenPainter extends CustomPainter {
     final path = Path()
       ..moveTo(0, waveY + 20)
       ..cubicTo(
-        size.width * 0, waveY - 80,
-        size.width * 0.50, waveY - 50,
-        size.width * 0.50, waveY + 90,
+        size.width * 0,
+        waveY - 80,
+        size.width * 0.50,
+        waveY - 50,
+        size.width * 0.50,
+        waveY + 90,
       )
       ..cubicTo(
-        size.width * 0.90, waveY + 140, 
-        size.width * 1, waveY + 70,
-        size.width,        waveY,
+        size.width * 0.90,
+        waveY + 140,
+        size.width * 1,
+        waveY + 70,
+        size.width,
+        waveY,
       )
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
@@ -255,6 +399,5 @@ class _FullScreenPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _FullScreenPainter old) =>
-      old.waveRatio != waveRatio;
+  bool shouldRepaint(covariant _FullScreenPainter old) => old.waveRatio != waveRatio;
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/auth/auth_gate.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
@@ -13,7 +15,7 @@ class ProfileScreen extends StatelessWidget {
 
   const ProfileScreen({
     super.key,
-    this.accountType = 'premium',
+    this.accountType = 'gratuit',
   });
 
   @override
@@ -256,7 +258,7 @@ class _SubscriptionSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          if (plan.key == 'premium')
+          if (plan.key == 'flex')
             const _PremiumMemberBadge()
           else ...[
             if (plan.key == 'gratuit') ...[
@@ -419,17 +421,28 @@ class _SettingsTile extends StatelessWidget {
   }
 
   void _handleTap(BuildContext context) {
+    if (data.icon == Icons.logout_rounded) {
+      _signOut(context);
+      return;
+    }
+
     if (data.routeKey == 'notifications') {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-      );
+      pushProtectedRoute(context, const NotificationsScreen());
       return;
     }
 
     if (data.icon == Icons.lock_outline_rounded) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => const SecurityScreen()),
-      );
+      pushProtectedRoute(context, const SecurityScreen());
+    }
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      }
     }
   }
 
@@ -488,25 +501,25 @@ class _ProfilePlan {
 
   factory _ProfilePlan.from(String value) {
     switch (value.toLowerCase()) {
-      case 'premium':
+      case 'flex':
         return const _ProfilePlan(
-          key: 'premium',
+          key: 'flex',
           memberLabel: 'Membre Premium',
-          planLabel: 'Essentiel',
+          planLabel: 'Flex',
           icon: Icons.star_rounded,
         );
-      case 'standard':
+      case 'essentiel':
         return const _ProfilePlan(
-          key: 'standard',
+          key: 'essentiel',
           memberLabel: 'Membre Standard',
-          planLabel: 'Standard',
+          planLabel: 'Essentiel',
           icon: Icons.star_rounded,
         );
       default:
         return const _ProfilePlan(
           key: 'gratuit',
           memberLabel: 'Membre Gratuit',
-          planLabel: 'Gratuit',
+          planLabel: 'Découverte',
           icon: Icons.star_rounded,
         );
     }

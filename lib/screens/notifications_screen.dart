@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../core/constants/app_constants.dart';
+import '../core/models/app_notification.dart';
+import '../core/services/notifications_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../core/utils/notification_time_formatter.dart';
+import '../core/utils/notification_visuals.dart';
+import '../core/widgets/app_shimmer.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -14,78 +19,46 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final _service = NotificationsService();
+
   String _selectedFilter = 'toutes';
-  late List<_NotificationData> _notifications;
+  List<AppNotification> _notifications = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _notifications = List<_NotificationData>.from(_mockNotifications);
+    _loadNotifications();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final filteredNotifications = _filteredNotifications;
-    final hasUnread = _notifications.any((notification) => !notification.isRead);
+  Future<void> _loadNotifications() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-    return Material(
-      color: AppColors.blancCasse,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _NotificationsHeader(
-                  onBack: () => Navigator.of(context).pop(),
-                  onReadAll: _markAllAsRead,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _NotificationFilters(
-                  selectedFilter: _selectedFilter,
-                  onChanged: (value) => setState(() => _selectedFilter = value),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                if (filteredNotifications.isEmpty)
-                  const _EmptyNotifications()
-                else
-                  for (final notification in filteredNotifications) ...[
-                    _NotificationCard(notification: notification),
-                    if (notification != filteredNotifications.last) const SizedBox(height: AppSpacing.md),
-                  ],
-                if (hasUnread) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _markAllAsRead,
-                      icon: const Icon(Icons.done_all_rounded, size: AppSpacing.lg),
-                      label: const Text('Marquer tout comme lu'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.violetRoyal,
-                        side: const BorderSide(color: AppColors.violetRoyal),
-                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    try {
+      final notifications = await _service.fetchAll();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _notifications = notifications;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Impossible de charger les notifications';
+      });
+    }
   }
 
-  List<_NotificationData> get _filteredNotifications {
+  List<AppNotification> get _filteredNotifications {
     switch (_selectedFilter) {
       case 'non_lues':
         return _notifications.where((notification) => !notification.isRead).toList();
@@ -98,12 +71,200 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _markAllAsRead() {
+  bool get _hasUnread => _notifications.any((notification) => !notification.isRead);
+
+  Future<void> _markAsRead(AppNotification notification) async {
+    if (notification.isRead) {
+      _handleNotificationAction(notification);
+      return;
+    }
+
+    setState(() {
+      final index = _notifications.indexWhere((item) => item.id == notification.id);
+      if (index != -1) {
+        _notifications[index] = notification.copyWith(isRead: true);
+      }
+    });
+
+    try {
+      await _service.markAsRead(notification.id);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      await _loadNotifications();
+    }
+
+    if (mounted) {
+      _handleNotificationAction(notification);
+    }
+  }
+
+  void _handleNotificationAction(AppNotification notification) {
+    final actionUrl = notification.metadata['action_url'] as String?;
+    if (actionUrl == '/subscription') {
+      Navigator.of(context).pushNamed('/subscription');
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    if (!_hasUnread) {
+      return;
+    }
+
     setState(() {
       _notifications = [
         for (final notification in _notifications) notification.copyWith(isRead: true),
       ];
     });
+
+    try {
+      await _service.markAllAsRead();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      await _loadNotifications();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredNotifications = _filteredNotifications;
+
+    return Material(
+      color: AppColors.blancCasse,
+      child: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
+          child: _isLoading
+              ? const _NotificationsLoadingView()
+              : _errorMessage != null
+                  ? _NotificationsErrorView(message: _errorMessage!, onRetry: _loadNotifications)
+                  : SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.xl,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _NotificationsHeader(
+                            onBack: () => Navigator.of(context).pop(),
+                            onReadAll: _markAllAsRead,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _NotificationFilters(
+                            selectedFilter: _selectedFilter,
+                            onChanged: (value) => setState(() => _selectedFilter = value),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          if (filteredNotifications.isEmpty)
+                            const _EmptyNotifications()
+                          else
+                            for (final notification in filteredNotifications) ...[
+                              _NotificationCard(
+                                notification: notification,
+                                onTap: () => _markAsRead(notification),
+                              ),
+                              if (notification != filteredNotifications.last)
+                                const SizedBox(height: AppSpacing.md),
+                            ],
+                          if (_hasUnread) ...[
+                            const SizedBox(height: AppSpacing.xl),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _markAllAsRead,
+                                icon: const Icon(Icons.done_all_rounded, size: AppSpacing.lg),
+                                label: const Text('Marquer tout comme lu'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.violetRoyal,
+                                  side: const BorderSide(color: AppColors.violetRoyal),
+                                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+        ),
+      ),
+    ),
+    );
+  }
+}
+
+class _NotificationsLoadingView extends StatelessWidget {
+  const _NotificationsLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
+      child: Column(
+        children: [
+          const ShimmerBox(height: 40),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                const Expanded(child: ShimmerBox(height: 36)),
+                if (i < 3) const SizedBox(width: AppSpacing.sm),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          for (var i = 0; i < 4; i++) ...[
+            const ShimmerBox(height: 96),
+            if (i < 3) const SizedBox(height: AppSpacing.md),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationsErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _NotificationsErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTypography.textTheme.bodyMedium?.copyWith(
+              color: AppColors.noirDoux.withValues(alpha: 0.72),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -232,81 +393,91 @@ class _FilterPill extends StatelessWidget {
 }
 
 class _NotificationCard extends StatelessWidget {
-  final _NotificationData notification;
+  final AppNotification notification;
+  final VoidCallback onTap;
 
-  const _NotificationCard({required this.notification});
+  const _NotificationCard({
+    required this.notification,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppDecorations.cardDecoration.copyWith(
-        color: notification.isRead ? AppColors.blancCasse : AppColors.beigeCremeAlt,
-        border: Border.all(color: notification.color.withValues(alpha: 0.12)),
-      ),
-      child: Stack(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: AppSpacing.xl,
-                height: AppSpacing.xl,
-                decoration: BoxDecoration(
-                  color: notification.color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+    final visuals = NotificationVisualsResolver.fromType(notification.type);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppDecorations.cardDecoration.copyWith(
+          color: notification.isRead ? AppColors.blancCasse : AppColors.beigeCremeAlt,
+          border: Border.all(color: visuals.color.withValues(alpha: 0.12)),
+        ),
+        child: Stack(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: AppSpacing.xl,
+                  height: AppSpacing.xl,
+                  decoration: BoxDecoration(
+                    color: visuals.color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(visuals.icon, color: visuals.color, size: AppSpacing.md),
                 ),
-                child: Icon(notification.icon, color: notification.color, size: AppSpacing.md),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      notification.title,
-                      style: AppTypography.textTheme.headlineLarge?.copyWith(
-                        color: AppColors.noirDoux,
-                        fontWeight: FontWeight.w500,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        notification.title,
+                        style: AppTypography.textTheme.headlineLarge?.copyWith(
+                          color: AppColors.noirDoux,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      notification.description,
-                      style: AppTypography.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.noirDoux.withValues(alpha: 0.70),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        notification.body,
+                        style: AppTypography.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.noirDoux.withValues(alpha: 0.70),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Padding(
-                padding: EdgeInsets.only(top: notification.isRead ? 0 : AppSpacing.md),
-                child: Text(
-                  notification.time,
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.noirDoux.withValues(alpha: 0.48),
+                const SizedBox(width: AppSpacing.md),
+                Padding(
+                  padding: EdgeInsets.only(top: notification.isRead ? 0 : AppSpacing.md),
+                  child: Text(
+                    NotificationTimeFormatter.format(notification.createdAt),
+                    style: AppTypography.textTheme.bodySmall?.copyWith(
+                      color: AppColors.noirDoux.withValues(alpha: 0.48),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!notification.isRead)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: AppSpacing.sm,
+                  height: AppSpacing.sm,
+                  decoration: const BoxDecoration(
+                    color: AppColors.violetRoyal,
+                    shape: BoxShape.circle,
                   ),
                 ),
               ),
-            ],
-          ),
-          if (!notification.isRead)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                width: AppSpacing.sm,
-                height: AppSpacing.sm,
-                decoration: const BoxDecoration(
-                  color: AppColors.violetRoyal,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -340,38 +511,6 @@ class _EmptyNotifications extends StatelessWidget {
   }
 }
 
-class _NotificationData {
-  final String title;
-  final String description;
-  final String time;
-  final IconData icon;
-  final Color color;
-  final String category;
-  final bool isRead;
-
-  const _NotificationData({
-    required this.title,
-    required this.description,
-    required this.time,
-    required this.icon,
-    required this.color,
-    required this.category,
-    required this.isRead,
-  });
-
-  _NotificationData copyWith({bool? isRead}) {
-    return _NotificationData(
-      title: title,
-      description: description,
-      time: time,
-      icon: icon,
-      color: color,
-      category: category,
-      isRead: isRead ?? this.isRead,
-    );
-  }
-}
-
 class _FilterData {
   final String label;
   final String value;
@@ -381,60 +520,3 @@ class _FilterData {
     required this.value,
   });
 }
-
-const _mockNotifications = [
-  _NotificationData(
-    title: 'Limite proche',
-    description: 'Il ne vous reste que 3 invités dans votre quota. Passez à Essentiel pour continuer sans limite.',
-    time: 'Il y a 5 min',
-    icon: Icons.warning_amber_rounded,
-    color: AppColors.warning,
-    category: 'systeme',
-    isRead: false,
-  ),
-  _NotificationData(
-    title: 'Offre spéciale',
-    description: 'Profitez de -20% sur le plan Essentiel ce mois-ci. Offre limitée !',
-    time: 'Il y a 1 h',
-    icon: Icons.star_rounded,
-    color: AppColors.violetRoyal,
-    category: 'offres',
-    isRead: false,
-  ),
-  _NotificationData(
-    title: 'Événement créé',
-    description: 'Votre événement "Mariage Kouassi & Amani" a été créé avec succès.',
-    time: 'Hier',
-    icon: Icons.check_circle_rounded,
-    color: AppColors.success,
-    category: 'systeme',
-    isRead: true,
-  ),
-  _NotificationData(
-    title: 'Invitations envoyées',
-    description: '45 invitations ont été envoyées pour l\'événement "Anniversaire de Kofi".',
-    time: '12 mai',
-    icon: Icons.email_outlined,
-    color: AppColors.info,
-    category: 'systeme',
-    isRead: true,
-  ),
-  _NotificationData(
-    title: 'Sécurité',
-    description: 'Une connexion depuis un nouvel appareil a été détectée sur votre compte.',
-    time: '10 mai',
-    icon: Icons.lock_outline_rounded,
-    color: AppColors.noirDoux,
-    category: 'systeme',
-    isRead: false,
-  ),
-  _NotificationData(
-    title: 'Quota atteint',
-    description: 'Vous avez atteint la limite de 3 événements de votre plan Gratuit. Passez à Essentiel pour continuer.',
-    time: '08 mai',
-    icon: Icons.block_rounded,
-    color: AppColors.error,
-    category: 'systeme',
-    isRead: true,
-  ),
-];

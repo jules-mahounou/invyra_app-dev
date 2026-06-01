@@ -1,5 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/auth/auth_error_message.dart';
+import '../core/config/supabase_config.dart';
 import '../core/constants/app_assets.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
@@ -13,8 +17,136 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   bool obscurePassword = true;
   bool obscureConfirm = true;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _verifyUserProfile(String userId) async {
+    final client = Supabase.instance.client;
+
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final row = await client.from('users').select('id').eq('id', userId).maybeSingle();
+      if (row != null) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return false;
+  }
+
+  Future<void> _signUpWithEmail() async {
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (username.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      setState(() => _errorMessage = 'Veuillez remplir tous les champs.');
+      return;
+    }
+
+    if (password != confirmPassword) {
+      setState(() => _errorMessage = 'Les mots de passe ne correspondent pas.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setState(() => _errorMessage = 'Le mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+        emailRedirectTo: kIsWeb ? null : SupabaseConfig.authRedirectUrl,
+        data: {
+          'username': username,
+          'full_name': username,
+        },
+      );
+
+      final user = response.user;
+      if (user == null) {
+        setState(() => _errorMessage = 'Impossible de créer le compte. Réessayez.');
+        return;
+      }
+
+      if (response.session != null) {
+        final profileReady = await _verifyUserProfile(user.id);
+        if (!mounted) {
+          return;
+        }
+        if (!profileReady) {
+          setState(() {
+            _errorMessage =
+                'Compte créé, mais le profil n\'a pas encore été synchronisé. Réessayez de vous connecter.';
+          });
+          return;
+        }
+        Navigator.pushReplacementNamed(context, '/home');
+        return;
+      }
+
+      setState(() {
+        _errorMessage =
+            'Compte créé. Vérifiez votre boîte mail pour confirmer votre inscription, puis connectez-vous.';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _errorMessage = authErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : SupabaseConfig.authRedirectUrl,
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _errorMessage = authErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,80 +180,127 @@ class _SignupScreenState extends State<SignupScreen> {
                         fit: BoxFit.contain,
                       ),
                     ),
-                      const SizedBox(height: 16),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Créer un compte',
+                      style: AppTypography.textTheme.displayMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.noirDoux,
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 4, bottom: 18),
+                      height: 3,
+                      width: 58,
+                      decoration: BoxDecoration(
+                        color: AppColors.orAfricain,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Text('Nom d’utilisateur', style: AppTypography.textTheme.bodyMedium),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _usernameController,
+                      hint: 'Choisissez un nom d’utilisateur',
+                      icon: Icons.person_outline,
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Email', style: AppTypography.textTheme.bodyMedium),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _emailController,
+                      hint: 'you@example.com',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Mot de passe', style: AppTypography.textTheme.bodyMedium),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _passwordController,
+                      hint: 'Créez un mot de passe',
+                      icon: Icons.lock_outline,
+                      isPassword: true,
+                      obscure: obscurePassword,
+                      onToggle: () => setState(() => obscurePassword = !obscurePassword),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Confirmer le mot de passe', style: AppTypography.textTheme.bodyMedium),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _confirmPasswordController,
+                      hint: 'Répétez votre mot de passe',
+                      icon: Icons.lock_outline,
+                      isPassword: true,
+                      obscure: obscureConfirm,
+                      onToggle: () => setState(() => obscureConfirm = !obscureConfirm),
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 12),
                       Text(
-                        'Créer un compte',
-                        style: AppTypography.textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.noirDoux,
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.only(top: 4, bottom: 18),
-                        height: 3,
-                        width: 58,
-                        decoration: BoxDecoration(
-                          color: AppColors.orAfricain,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Text('Nom d’utilisateur', style: AppTypography.textTheme.bodyMedium),
-                      const SizedBox(height: 6),
-                      _buildTextField(hint: 'Choisissez un nom d’utilisateur', icon: Icons.person_outline),
-                      const SizedBox(height: 16),
-                      Text('Email', style: AppTypography.textTheme.bodyMedium),
-                      const SizedBox(height: 6),
-                      _buildTextField(hint: 'you@example.com', icon: Icons.email_outlined),
-                      const SizedBox(height: 16),
-                      Text('Mot de passe', style: AppTypography.textTheme.bodyMedium),
-                      const SizedBox(height: 6),
-                      _buildTextField(hint: 'Créez un mot de passe', icon: Icons.lock_outline, isPassword: true, obscure: obscurePassword, onToggle: () => setState(() => obscurePassword = !obscurePassword)),
-                      const SizedBox(height: 16),
-                      Text('Confirmer le mot de passe', style: AppTypography.textTheme.bodyMedium),
-                      const SizedBox(height: 6),
-                      _buildTextField(hint: 'Répétez votre mot de passe', icon: Icons.lock_outline, isPassword: true, obscure: obscureConfirm, onToggle: () => setState(() => obscureConfirm = !obscureConfirm)),
-                      const SizedBox(height: 18),
-                      _buildPrimaryButton(),
-                      const SizedBox(height: 16),
-                      _buildGoogleButton(),
-                      const SizedBox(height: 18),
-                      Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Vous avez déjà un compte ?', style: AppTypography.textTheme.bodySmall),
-                            TextButton(
-                              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-                              style: TextButton.styleFrom(foregroundColor: AppColors.orAfricain),
-                              child: const Text('Se connecter'),
-                            ),
-                          ],
+                        _errorMessage!,
+                        style: AppTypography.textTheme.bodySmall?.copyWith(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 18),
+                    _buildPrimaryButton(),
+                    const SizedBox(height: 16),
+                    _buildGoogleButton(),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Vous avez déjà un compte ?', style: AppTypography.textTheme.bodySmall),
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => Navigator.pushReplacementNamed(context, '/login'),
+                            style: TextButton.styleFrom(foregroundColor: AppColors.orAfricain),
+                            child: const Text('Se connecter'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPrimaryButton() {
     return GestureDetector(
-      onTap: () {},
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          gradient: AppColors.gradientPrincipal,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: const Text(
-          'Créer un compte',
-          style: TextStyle(color: AppColors.blancCasse, fontWeight: FontWeight.w600, fontSize: 16),
+      onTap: _isLoading ? null : _signUpWithEmail,
+      child: Opacity(
+        opacity: _isLoading ? 0.6 : 1,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            gradient: AppColors.gradientPrincipal,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.blancCasse,
+                  ),
+                )
+              : const Text(
+                  'Créer un compte',
+                  style: TextStyle(color: AppColors.blancCasse, fontWeight: FontWeight.w600, fontSize: 16),
+                ),
         ),
       ),
     );
@@ -136,7 +315,7 @@ class _SignupScreenState extends State<SignupScreen> {
         border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.12)),
       ),
       child: TextButton.icon(
-        onPressed: () {},
+        onPressed: _isLoading ? null : _signInWithGoogle,
         icon: Image.asset(
           AppAssets.googleLogo,
           width: 18,
@@ -153,14 +332,24 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildTextField({
+    required TextEditingController controller,
     required String hint,
     required IconData icon,
     bool isPassword = false,
     bool obscure = false,
     VoidCallback? onToggle,
+    TextInputType? keyboardType,
   }) {
     return TextField(
+      controller: controller,
+      enabled: !_isLoading,
       obscureText: isPassword ? obscure : false,
+      keyboardType: keyboardType,
+      onChanged: (_) {
+        if (_errorMessage != null) {
+          setState(() => _errorMessage = null);
+        }
+      },
       decoration: InputDecoration(
         prefixIcon: Icon(icon, size: 20, color: AppColors.noirDoux.withValues(alpha: 0.55)),
         hintText: hint,
@@ -174,7 +363,11 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
         suffixIcon: isPassword
             ? IconButton(
-                icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 20, color: AppColors.noirDoux.withValues(alpha: 0.55)),
+                icon: Icon(
+                  obscure ? Icons.visibility_off : Icons.visibility,
+                  size: 20,
+                  color: AppColors.noirDoux.withValues(alpha: 0.55),
+                ),
                 onPressed: onToggle,
               )
             : null,
