@@ -1,0 +1,42 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.iml
+
+# Android
+android/build/
+android/.gradle/
+android/app/build/
+android/local.properties
+android/key.properties
+
+# iOS/macOS
+ios/Pods/
+macos/Pods/
+ios/.symlinks/
+
+# Windows/Linux
+windows/flutter/generated_plugin_registrant.cc
+linux/flutter/generated_plugin_registrant.cc
+
+# Env & secrets
+.env
+*.env
+.env.*
+
+# IDE
+.idea/
+.vs/
+*.suo
+*.user
+
+# Logs et fichiers debug
+out.txt
+out_android.txt
+out_build.txt
+
+# Pub
+pubspec.lock

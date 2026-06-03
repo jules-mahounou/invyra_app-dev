@@ -35,7 +35,7 @@ class HomeDashboardService {
     final eventsResponse = await _client
         .from('events')
         .select(
-          'id, name, event_date, place, status, guests_confirmed, invitations_sent, created_at',
+          'id, name, event_date, place, status, logo_url, guests_confirmed, invitations_sent, created_at',
         )
         .eq('user_id', userId)
         .order('created_at', ascending: false);

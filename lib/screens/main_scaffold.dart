@@ -38,6 +38,8 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   final _profileService = UserProfileService();
   final _notificationsService = NotificationsService();
+  final _homeKey = GlobalKey<HomeTabContentState>();
+  final _eventsKey = GlobalKey<EventsScreenState>();
 
   late int _currentIndex;
   late bool _createEventOpen;
@@ -141,13 +143,19 @@ class _MainScaffoldState extends State<MainScaffold> {
               child: IndexedStack(
                 index: _currentIndex,
                 children: [
-                  const HomeTabContent(),
+                  HomeTabContent(
+                    key: _homeKey,
+                    onSeeAllEvents: _openEventsList,
+                  ),
                   _createEventOpen
                       ? CreateEventTabContent(
                           accountType: _accountType,
                           onBack: _closeCreateEvent,
                         )
-                      : EventsScreen(onCreate: _openCreateEvent),
+                      : EventsScreen(
+                          key: _eventsKey,
+                          onCreate: _openCreateEvent,
+                        ),
                   TemplatesScreen(accountType: _accountType),
                   ProfileScreen(accountType: _accountType),
                 ],
@@ -173,6 +181,20 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   void _closeCreateEvent() {
     setState(() => _createEventOpen = false);
+    _refreshHomeAndEvents();
+  }
+
+  void _openEventsList() {
+    setState(() {
+      _currentIndex = 1;
+      _createEventOpen = false;
+    });
+    _eventsKey.currentState?.refresh();
+  }
+
+  void _refreshHomeAndEvents() {
+    _homeKey.currentState?.refresh();
+    _eventsKey.currentState?.refresh();
   }
 
   void _onNavChanged(int index) {
@@ -182,6 +204,11 @@ class _MainScaffoldState extends State<MainScaffold> {
         _createEventOpen = false;
       }
     });
+    if (index == 0) {
+      _homeKey.currentState?.refresh();
+    } else if (index == 1 && !_createEventOpen) {
+      _eventsKey.currentState?.refresh();
+    }
   }
 }
 

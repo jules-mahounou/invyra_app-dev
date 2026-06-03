@@ -4,6 +4,7 @@ class RecentEvent {
   final DateTime? eventDate;
   final String place;
   final String status;
+  final String? logoUrl;
 
   const RecentEvent({
     required this.id,
@@ -11,6 +12,7 @@ class RecentEvent {
     this.eventDate,
     required this.place,
     required this.status,
+    this.logoUrl,
   });
 
   factory RecentEvent.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class RecentEvent {
       eventDate: json['event_date'] != null ? DateTime.tryParse(json['event_date'] as String) : null,
       place: json['place'] as String? ?? 'Lieu à définir',
       status: json['status'] as String? ?? 'a_venir',
+      logoUrl: json['logo_url'] as String?,
     );
   }
 }

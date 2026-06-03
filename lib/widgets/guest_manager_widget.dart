@@ -4,63 +4,53 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../services/import_service.dart';
+import '../services/guest_service.dart';
+import '../screens/create_event/create_event_utils.dart';
 
 class GuestManagerWidget extends StatefulWidget {
-  final List<Map<String, dynamic>> initialGuests;
-  final Function(List<Map<String, dynamic>>) onGuestsChanged;
+  final String eventId;
+  final VoidCallback? onChanged;
 
-  const GuestManagerWidget({
-    required this.initialGuests,
-    required this.onGuestsChanged,
-    super.key,
-  });
+  const GuestManagerWidget({required this.eventId, this.onChanged, super.key});
 
   @override
   State<GuestManagerWidget> createState() => _GuestManagerWidgetState();
 }
 
 class _GuestManagerWidgetState extends State<GuestManagerWidget> {
-  late List<Map<String, dynamic>> _guests;
+  final _guestService = GuestService();
+  final _importService = ImportService();
+
+  List<Map<String, dynamic>> _guests = [];
   bool _sendViaWhatsApp = true;
   bool _sendViaEmail = false;
+  bool _isLoading = true;
+  bool _isBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _guests = widget.initialGuests.map((guest) => Map<String, dynamic>.from(guest)).toList();
+    _loadGuests();
   }
 
-  @override
-  void didUpdateWidget(covariant GuestManagerWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialGuests != widget.initialGuests) {
-      _guests = widget.initialGuests.map((guest) => Map<String, dynamic>.from(guest)).toList();
+  Future<void> _loadGuests() async {
+    setState(() => _isLoading = true);
+    try {
+      final guests = await _guestService.getGuestsByEvent(widget.eventId);
+      if (!mounted) return;
+      setState(() {
+        _guests = guests;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      showCreateEventErrorSnackBar(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _ImportGuestsBox(),
-        const SizedBox(height: AppSpacing.lg),
-        _ManualGuestsBlock(
-          guests: _guests,
-          onGuestAdd: _showAddGuestSheet,
-          onGuestRemove: _removeGuest,
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _SendChannelsBlock(
-          sendViaWhatsApp: _sendViaWhatsApp,
-          sendViaEmail: _sendViaEmail,
-          onWhatsAppChanged: (value) => setState(() => _sendViaWhatsApp = value),
-          onEmailChanged: (value) => setState(() => _sendViaEmail = value),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        const _InvitationInfoCard(),
-      ],
-    );
   }
 
   Future<void> _showAddGuestSheet() async {
@@ -74,29 +64,208 @@ class _GuestManagerWidgetState extends State<GuestManagerWidget> {
       builder: (context) => const _AddGuestSheet(),
     );
 
-    if (guest == null) {
+    if (guest == null) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final created = await _guestService.addGuest(
+        eventId: widget.eventId,
+        fullName: guest['name'] as String,
+        phone: guest['phone'] as String?,
+        email: guest['email'] as String?,
+      );
+      if (!mounted) return;
+      setState(() {
+        _guests.add(created);
+        _isBusy = false;
+      });
+      widget.onChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isBusy = false);
+      showCreateEventErrorSnackBar(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
+  Future<void> _removeGuest(Map<String, dynamic> guest) async {
+    final guestId = guest['id'] as String?;
+    if (guestId == null) {
+      setState(() => _guests.remove(guest));
       return;
     }
 
-    setState(() => _guests.add(guest));
-    widget.onGuestsChanged(List<Map<String, dynamic>>.from(_guests));
+    setState(() => _isBusy = true);
+    try {
+      await _guestService.deleteGuest(guestId);
+      if (!mounted) return;
+      setState(() {
+        _guests.removeWhere((g) => g['id'] == guestId);
+        _isBusy = false;
+      });
+      widget.onChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isBusy = false);
+      showCreateEventErrorSnackBar(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
   }
 
-  void _removeGuest(Map<String, dynamic> guest) {
-    setState(() => _guests.remove(guest));
-    widget.onGuestsChanged(List<Map<String, dynamic>>.from(_guests));
+  Future<void> _importGuests() async {
+    List<Map<String, dynamic>>? guests;
+    try {
+      guests = await _importService.pickAndParseFile();
+    } catch (_) {
+      if (!mounted) return;
+      showCreateEventErrorSnackBar(
+        context,
+        'Format non reconnu. Utilisez .xlsx ou .csv',
+      );
+      return;
+    }
+    if (guests == null) return;
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${guests!.length} invités trouvés'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final guest in guests.take(5))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Text(
+                      guest['full_name'] as String,
+                      style: AppTypography.textTheme.bodyMedium,
+                    ),
+                  ),
+                if (guests.length > 5)
+                  Text(
+                    'et ${guests.length - 5} autres...',
+                    style: AppTypography.textTheme.bodySmall?.copyWith(
+                      color: AppColors.noirDoux.withValues(alpha: 0.64),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annuler'),
+          ),
+          _DialogGradientButton(
+            label: 'Importer',
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || guests.isEmpty) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final imported = <Map<String, dynamic>>[];
+      for (final guest in guests) {
+        final created = await _guestService.addGuest(
+          eventId: widget.eventId,
+          fullName: guest['full_name'] as String,
+          phone: guest['phone'] as String?,
+          email: guest['email'] as String?,
+          importSource: 'excel',
+        );
+        imported.add(created);
+      }
+      if (!mounted) return;
+      setState(() {
+        _guests.addAll(imported);
+        _isBusy = false;
+      });
+      widget.onChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isBusy = false);
+      showCreateEventErrorSnackBar(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.violetRoyal),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ImportGuestsBox(onTap: _importGuests),
+            const SizedBox(height: AppSpacing.lg),
+            _ManualGuestsBlock(
+              guests: _guests,
+              onGuestAdd: _showAddGuestSheet,
+              onGuestRemove: _removeGuest,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _SendChannelsBlock(
+              sendViaWhatsApp: _sendViaWhatsApp,
+              sendViaEmail: _sendViaEmail,
+              onWhatsAppChanged: (value) =>
+                  setState(() => _sendViaWhatsApp = value),
+              onEmailChanged: (value) => setState(() => _sendViaEmail = value),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            const _InvitationInfoCard(),
+          ],
+        ),
+        if (_isBusy)
+          Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.blancCasse.withValues(alpha: 0.5),
+              child: const Center(
+                child: CircularProgressIndicator(color: AppColors.violetRoyal),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
 class _ImportGuestsBox extends StatelessWidget {
-  const _ImportGuestsBox();
+  final VoidCallback onTap;
+
+  const _ImportGuestsBox({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _DashedRoundedBorderPainter(color: AppColors.violetRoyal.withValues(alpha: 0.38)),
+      painter: _DashedRoundedBorderPainter(
+        color: AppColors.violetRoyal.withValues(alpha: 0.38),
+      ),
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Container(
           width: double.infinity,
@@ -107,7 +276,11 @@ class _ImportGuestsBox extends StatelessWidget {
           ),
           child: Column(
             children: [
-              const Icon(Icons.upload_file_rounded, color: AppColors.violetRoyal, size: AppSpacing.xl),
+              const Icon(
+                Icons.upload_file_rounded,
+                color: AppColors.violetRoyal,
+                size: AppSpacing.xl,
+              ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Importer une liste Excel (.xlsx, .csv)',
@@ -143,7 +316,9 @@ class _ManualGuestsBlock extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: AppDecorations.cardDecoration.copyWith(
         color: AppColors.blancCasse,
-        border: Border.all(color: AppColors.violetRoyal.withValues(alpha: 0.10)),
+        border: Border.all(
+          color: AppColors.violetRoyal.withValues(alpha: 0.10),
+        ),
       ),
       child: Column(
         children: [
@@ -186,15 +361,12 @@ class _GuestTile extends StatelessWidget {
   final Map<String, dynamic> guest;
   final VoidCallback onRemove;
 
-  const _GuestTile({
-    required this.guest,
-    required this.onRemove,
-  });
+  const _GuestTile({required this.guest, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
-    final name = (guest['name'] ?? guest['nom'] ?? 'Invité') as String;
-    final phone = (guest['phone'] ?? guest['whatsapp'] ?? guest['telephone'] ?? '') as String;
+    final name = (guest['full_name'] ?? 'Invité') as String;
+    final phone = (guest['phone'] ?? '') as String;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -213,7 +385,9 @@ class _GuestTile extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: AppTypography.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 if (phone.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.xs),
@@ -311,7 +485,9 @@ class _SendChannelChip extends StatelessWidget {
       selectedColor: color.withValues(alpha: 0.12),
       backgroundColor: AppColors.noirDoux.withValues(alpha: 0.06),
       checkmarkColor: color,
-      side: BorderSide(color: selected ? color : AppColors.noirDoux.withValues(alpha: 0.10)),
+      side: BorderSide(
+        color: selected ? color : AppColors.noirDoux.withValues(alpha: 0.10),
+      ),
       labelStyle: AppTypography.textTheme.bodySmall?.copyWith(
         color: selected ? color : AppColors.noirDoux,
         fontWeight: FontWeight.w700,
@@ -335,12 +511,18 @@ class _InvitationInfoCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome_rounded, color: AppColors.orAfricain, size: AppSpacing.lg),
+          const Icon(
+            Icons.auto_awesome_rounded,
+            color: AppColors.orAfricain,
+            size: AppSpacing.lg,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               'Vos invitations seront prêtes à être envoyées sur WhatsApp dès la création.',
-              style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.noirDoux),
+              style: AppTypography.textTheme.bodyMedium?.copyWith(
+                color: AppColors.noirDoux,
+              ),
             ),
           ),
         ],
@@ -483,7 +665,9 @@ class _SheetTextField extends StatelessWidget {
         fillColor: AppColors.beigeCremeAlt,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: BorderSide(color: AppColors.orAfricain.withValues(alpha: 0.24)),
+          borderSide: BorderSide(
+            color: AppColors.orAfricain.withValues(alpha: 0.24),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -522,9 +706,40 @@ class _GradientActionButton extends StatelessWidget {
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
             foregroundColor: AppColors.blancCasse,
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.md,
+              horizontal: AppSpacing.lg,
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DialogGradientButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+
+  const _DialogGradientButton({required this.label, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: AppColors.gradientPrincipal,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.blancCasse,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+        ),
+        child: Text(label),
       ),
     );
   }
@@ -554,7 +769,10 @@ class _DashedRoundedBorderPainter extends CustomPainter {
       const dashWidth = 8.0;
       const dashGap = 6.0;
       while (distance < metric.length) {
-        canvas.drawPath(metric.extractPath(distance, distance + dashWidth), paint);
+        canvas.drawPath(
+          metric.extractPath(distance, distance + dashWidth),
+          paint,
+        );
         distance += dashWidth + dashGap;
       }
     }
