@@ -29,7 +29,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   int _currentStep = 1;
 
-  void _onStep1Completed(String eventId, String eventType) {
+  void _onStep1Completed(String eventId, String eventType, Map<String, dynamic> customFields) {
     setState(() {
       _eventId = eventId;
       _eventType = eventType;

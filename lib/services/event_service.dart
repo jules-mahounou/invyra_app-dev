@@ -5,6 +5,7 @@ import '../core/constants/supabase_schema.dart';
 class EventService {
   final _client = Supabase.instance.client;
 
+  /// Récupère tous les événements créés par l'utilisateur connecté
   Future<List<Map<String, dynamic>>> getMyEvents() async {
     try {
       final response = await _client
@@ -22,6 +23,7 @@ class EventService {
     }
   }
 
+  /// Vérifie le quota de création d'événements selon le type de compte de l'utilisateur
   Future<Map<String, dynamic>> checkEventCreationQuota() async {
     try {
       final userId = _client.auth.currentUser!.id;
@@ -64,6 +66,7 @@ class EventService {
     }
   }
 
+  /// Crée un nouvel événement initial
   Future<String> createEvent({
     required String name,
     required String eventType,
@@ -75,6 +78,8 @@ class EventService {
     String? description,
     String? logoUrl,
     String? sendChannel,
+    int? guestQuota,
+    Map<String, dynamic>? metadata,
   }) async {
     try {
       final validatedType = eventTypeOrThrow(eventType);
@@ -94,6 +99,8 @@ class EventService {
         'place_lng': placeLng,
         'description': normalizeOptionalText(description),
         'logo_url': normalizeOptionalText(logoUrl),
+        'guest_quota': guestQuota,
+        'metadata': metadata != null && metadata.isNotEmpty ? metadata : {'customField1Label': null, 'customField1Value': null, 'customField2Label': null, 'customField2Value': null},
       });
 
       if (validatedType == 'autre' && !data.containsKey('custom_type')) {
@@ -115,6 +122,7 @@ class EventService {
     }
   }
 
+  /// Met à jour le logo d'un événement
   Future<void> updateEventLogo({
     required String eventId,
     required String logoUrl,
@@ -133,6 +141,8 @@ class EventService {
     }
   }
 
+  /// Récupère les détails complets d'un événement par son ID
+  /// AJOUT INDISPENSABLE de web_template_key dans la jointure event_templates
   Future<Map<String, dynamic>> getEventById(String eventId) async {
     try {
       final response = await _client
@@ -140,7 +150,7 @@ class EventService {
           .select('''
             *,
             guests(id, full_name, phone, email, import_source, created_at),
-            event_templates(id, name, tier, asset_path, preview_url)
+            event_templates(id, name, tier, asset_path, preview_url, class_name, web_template_key)
           ''')
           .eq('id', eventId)
           .eq('user_id', _client.auth.currentUser!.id)
@@ -155,6 +165,7 @@ class EventService {
     }
   }
 
+  /// Met à jour les informations globales d'un événement
   Future<void> updateEvent({
     required String eventId,
     String? name,
@@ -167,6 +178,8 @@ class EventService {
     String? description,
     String? logoUrl,
     String? sendChannel,
+    int? guestQuota,
+    Map<String, dynamic>? metadata,
   }) async {
     try {
       final validatedType = eventType == null
@@ -188,6 +201,8 @@ class EventService {
         'description': normalizeOptionalText(description),
         'logo_url': normalizeOptionalText(logoUrl),
         'send_channel': validatedChannel,
+        'guest_quota': guestQuota,
+        'metadata': metadata,
       });
       if (data.isEmpty) return;
       await _client
@@ -204,6 +219,7 @@ class EventService {
     }
   }
 
+  /// Supprime un événement
   Future<void> deleteEvent(String eventId) async {
     try {
       await _client
@@ -220,6 +236,7 @@ class EventService {
     }
   }
 
+  /// Met à jour le statut d'un événement (ex: à venir, terminé)
   Future<void> updateEventStatus({
     required String eventId,
     required String status,
@@ -240,6 +257,7 @@ class EventService {
     }
   }
 
+  /// Associe un template graphique à l'événement
   Future<void> updateEventTemplate({
     required String eventId,
     required String templateId,
@@ -258,6 +276,7 @@ class EventService {
     }
   }
 
+  /// Récupère la liste des templates actifs filtrés par type d'événement
   Future<List<Map<String, dynamic>>> getTemplatesByEventType(
     String eventType,
   ) async {
@@ -279,6 +298,7 @@ class EventService {
     }
   }
 
+  /// Récupère l'intégralité des templates actifs
   Future<List<Map<String, dynamic>>> getAllTemplates() async {
     try {
       final response = await _client

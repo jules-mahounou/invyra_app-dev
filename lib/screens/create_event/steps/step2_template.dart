@@ -6,6 +6,7 @@ import '../../../core/theme/app_decorations.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../services/event_service.dart';
+import '../../web_preview_screen.dart'; // Assure-toi que le chemin vers ton WebPreviewScreen est correct
 import '../create_event_utils.dart';
 
 /// Étape 2 — Choix du template (liste verticale + filtres, comme l’ancien écran).
@@ -138,6 +139,27 @@ class _Step2TemplateState extends State<Step2Template> {
     }
   }
 
+  // Redirection moderne vers l'aperçu Web au lieu de l'ancienne boîte modale
+  void _openPreview(Map<String, dynamic> template) {
+    final String? webKey = template['web_template_key'];
+    final String templateName = template['name'] ?? "Invitation";
+
+    if (webKey != null && webKey.isNotEmpty) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => WebPreviewScreen(
+            webTemplateKey: webKey,
+            templateName: templateName,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cet aperçu n'est pas encore disponible en ligne.")),
+      );
+    }
+  }
+
   Future<void> _handleContinue() async {
     if (_selectedTemplateId == null) {
       showCreateEventErrorSnackBar(context, 'Veuillez choisir un template');
@@ -237,6 +259,7 @@ class _Step2TemplateState extends State<Step2Template> {
                     ),
                     selected: _selectedTemplateId == template['id'],
                     onTap: () => _onTemplateTap(template),
+                    onPreview: () => _openPreview(template),
                   ),
                   if (template != templates.last)
                     const SizedBox(height: AppSpacing.md),
@@ -343,12 +366,14 @@ class _TemplateCard extends StatelessWidget {
   final bool locked;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onPreview;
 
   const _TemplateCard({
     required this.template,
     required this.locked,
     required this.selected,
     required this.onTap,
+    required this.onPreview,
   });
 
   @override
@@ -411,6 +436,35 @@ class _TemplateCard extends StatelessWidget {
                           ),
                         ),
                       ],
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: onPreview,
+                              icon: const Icon(Icons.visibility_rounded),
+                              label: const Text('Aperçu'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.violetRoyal,
+                                side: BorderSide(
+                                  color: AppColors.violetRoyal.withValues(alpha: 0.28),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: onTap,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.violetRoyal,
+                                foregroundColor: AppColors.blancCasse,
+                              ),
+                              child: const Text('Choisir'),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: AppSpacing.sm),
                       Wrap(
                         spacing: AppSpacing.sm,

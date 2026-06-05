@@ -1,62 +1,12 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
-
-const List<Map<String, dynamic>> mockTemplates = [
-  {
-    'id': '1',
-    'name': 'Asante Gold Wedding',
-    'description': 'Élégance africaine avec motifs Kente et typographie sur mesure.',
-    'type': 'mariage',
-    'tier': 'premium',
-    'popular': false,
-    'tags': ['Animé'],
-    'asset': 'assets/images/templates/template_mariage.png',
-  },
-  {
-    'id': '2',
-    'name': 'Midnight Accra VIP',
-    'description': 'Luxe sombre pour célébrations urbaines exclusives.',
-    'type': 'soiree_vip',
-    'tier': 'premium',
-    'popular': true,
-    'tags': ['Glassmorphisme', 'Animé'],
-    'asset': 'assets/images/templates/template_soiree_vip.png',
-  },
-  {
-    'id': '3',
-    'name': 'Sun-Drenched Soirée',
-    'description': 'Couleurs vives et motifs rythmiques.',
-    'type': 'anniversaire',
-    'tier': 'gratuit',
-    'popular': true,
-    'tags': ['Populaire'],
-    'asset': 'assets/images/templates/template_anniversaire.png',
-  },
-  {
-    'id': '4',
-    'name': 'Sacred Lilies Suite',
-    'description': 'Lavande douce et accents dorés.',
-    'type': 'mariage',
-    'tier': 'gratuit',
-    'popular': false,
-    'tags': [],
-    'asset': 'assets/images/templates/template_mariage.png',
-  },
-  {
-    'id': '5',
-    'name': 'Douceur Pastel',
-    'description': 'Tendresse et pureté pour un baptême inoubliable.',
-    'type': 'bapteme',
-    'tier': 'gratuit',
-    'popular': false,
-    'tags': [],
-    'asset': 'assets/images/templates/template_bapteme.png',
-  },
-];
+import 'web_preview_screen.dart';
 
 class TemplatesScreen extends StatefulWidget {
   final String accountType;
@@ -73,6 +23,22 @@ class TemplatesScreen extends StatefulWidget {
 class _TemplatesScreenState extends State<TemplatesScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'tous';
+  late Future<List<Map<String, dynamic>>> _templatesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTemplates();
+  }
+
+  void _loadTemplates() {
+    // Récupération dynamique et automatique de tes modèles depuis Supabase
+    _templatesFuture = Supabase.instance.client
+        .from('event_templates')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', ascending: true);
+  }
 
   @override
   void dispose() {
@@ -80,105 +46,140 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     super.dispose();
   }
 
+  void _openWebPreview(Map<String, dynamic> template) {
+    final webKey = template['web_template_key'] as String?;
+    if (webKey != null && webKey.isNotEmpty) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => WebPreviewScreen(
+          webTemplateKey: webKey,
+          templateName: template['name'] ?? 'Invitation',
+        ),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filteredTemplates = _filteredTemplates;
-    final popularTemplates = filteredTemplates.where((template) => template['popular'] == true).toList();
-
     return Material(
       color: AppColors.blancCasse,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Modèles d’invitation',
-                  style: AppTypography.textTheme.displayMedium?.copyWith(
-                    color: AppColors.noirDoux,
-                    fontWeight: FontWeight.w700,
-                  ),
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _templatesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.violetRoyal),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Erreur de chargement des modèles',
+                style: AppTypography.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.noirDoux,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Découvrez notre galerie exclusive',
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.noirDoux.withValues(alpha: 0.62),
-                  ),
+              ),
+            );
+          }
+
+          final allTemplates = snapshot.data ?? [];
+          final filteredTemplates = _filteredTemplates(allTemplates);
+          final popularTemplates = filteredTemplates.where((template) => template['is_popular'] == true).toList();
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                _SearchField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _TemplateFilters(
-                  selectedFilter: _selectedFilter,
-                  onChanged: (value) => setState(() => _selectedFilter = value),
-                ),
-                if (popularTemplates.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  _SectionTitle(title: '⭐ Populaires'),
-                  const SizedBox(height: AppSpacing.md),
-                  for (final template in popularTemplates) ...[
-                    Builder(
-                      builder: (context) {
-                        // TODO: décommenter lors de l'intégration backend
-                        // final bool isLocked = widget.accountType == 'gratuit' && template['tier'] == 'premium';
-                        const bool isLocked = false; // retiré pour les tests frontend
-                        return _TemplateLibraryCard(template: template, locked: isLocked);
-                      },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Modèles d’invitation',
+                      style: AppTypography.textTheme.displayMedium?.copyWith(
+                        color: AppColors.noirDoux,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    if (template != popularTemplates.last) const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Découvrez notre galerie exclusive',
+                      style: AppTypography.textTheme.bodyMedium?.copyWith(
+                        color: AppColors.noirDoux.withValues(alpha: 0.62),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _SearchField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _TemplateFilters(
+                      selectedFilter: _selectedFilter,
+                      onChanged: (value) => setState(() => _selectedFilter = value),
+                    ),
+                    if (popularTemplates.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      const _SectionTitle(title: '⭐ Populaires'),
+                      const SizedBox(height: AppSpacing.md),
+                      for (final template in popularTemplates) ...[
+                        _TemplateLibraryCard(
+                          template: template,
+                          locked: false,
+                          onPreviewTap: () => _openWebPreview(template),
+                        ),
+                        if (template != popularTemplates.last) const SizedBox(height: AppSpacing.md),
+                      ],
+                    ],
+                    const SizedBox(height: AppSpacing.xl),
+                    const _SectionTitle(title: 'Tous les modèles'),
+                    const SizedBox(height: AppSpacing.md),
+                    if (filteredTemplates.isEmpty)
+                      Text(
+                        'Aucun modèle ne correspond à votre recherche.',
+                        style: AppTypography.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.noirDoux.withValues(alpha: 0.70),
+                        ),
+                      )
+                    else
+                      for (final template in filteredTemplates) ...[
+                        _TemplateLibraryCard(
+                          template: template,
+                          locked: false,
+                          onPreviewTap: () => _openWebPreview(template),
+                        ),
+                        if (template != filteredTemplates.last) const SizedBox(height: AppSpacing.md),
+                      ],
                   ],
-                ],
-                const SizedBox(height: AppSpacing.xl),
-                _SectionTitle(title: 'Tous les modèles'),
-                const SizedBox(height: AppSpacing.md),
-                if (filteredTemplates.isEmpty)
-                  Text(
-                    'Aucun modèle ne correspond à votre recherche.',
-                    style: AppTypography.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.noirDoux.withValues(alpha: 0.70),
-                    ),
-                  )
-                else
-                  for (final template in filteredTemplates) ...[
-                    Builder(
-                      builder: (context) {
-                        // TODO: décommenter lors de l'intégration backend
-                        // final bool isLocked = widget.accountType == 'gratuit' && template['tier'] == 'premium';
-                        const bool isLocked = false; // retiré pour les tests frontend
-                        return _TemplateLibraryCard(template: template, locked: isLocked);
-                      },
-                    ),
-                    if (template != filteredTemplates.last) const SizedBox(height: AppSpacing.md),
-                  ],
-              ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
-  List<Map<String, dynamic>> get _filteredTemplates {
+  List<Map<String, dynamic>> _filteredTemplates(List<Map<String, dynamic>> templates) {
     final query = _searchController.text.trim().toLowerCase();
-    return mockTemplates.where((template) {
-      final type = template['type'] as String;
-      final name = (template['name'] as String).toLowerCase();
-      final description = (template['description'] as String).toLowerCase();
+    return templates.where((template) {
+      final type = template['event_type'] as String? ?? '';
+      final name = (template['name'] as String? ?? '').toLowerCase();
+      final description = (template['description'] as String? ?? '').toLowerCase();
+      
+      final rawTags = template['tags'];
+      final String tagsString = rawTags is List ? rawTags.join(' ').toLowerCase() : '';
+
       final matchesFilter = _selectedFilter == 'tous' || type == _selectedFilter;
-      final matchesSearch = query.isEmpty || name.contains(query) || description.contains(query);
+      final matchesSearch = query.isEmpty || 
+                            name.contains(query) || 
+                            description.contains(query) || 
+                            tagsString.contains(query);
       return matchesFilter && matchesSearch;
     }).toList();
   }
@@ -188,10 +189,7 @@ class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
 
-  const _SearchField({
-    required this.controller,
-    required this.onChanged,
-  });
+  const _SearchField({required this.controller, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -224,18 +222,15 @@ class _TemplateFilters extends StatelessWidget {
   final String selectedFilter;
   final ValueChanged<String> onChanged;
 
-  const _TemplateFilters({
-    required this.selectedFilter,
-    required this.onChanged,
-  });
+  const _TemplateFilters({required this.selectedFilter, required this.onChanged});
 
   static const filters = [
-    _TemplateFilterData(label: 'Tous', value: 'tous'),
-    _TemplateFilterData(label: 'Mariage', value: 'mariage'),
-    _TemplateFilterData(label: 'Anniversaire', value: 'anniversaire'),
-    _TemplateFilterData(label: 'Baptême', value: 'bapteme'),
-    _TemplateFilterData(label: 'Soirée VIP', value: 'soiree_vip'),
-    _TemplateFilterData(label: 'Autre', value: 'autre'),
+    _EventFilterData(label: 'Tous', value: 'tous'),
+    _EventFilterData(label: 'Mariage', value: 'mariage'),
+    _EventFilterData(label: 'Anniversaire', value: 'anniversaire'),
+    _EventFilterData(label: 'Baptême', value: 'bapteme'),
+    _EventFilterData(label: 'Soirée VIP', value: 'soiree_vip'),
+    _EventFilterData(label: 'Autre', value: 'autre'),
   ];
 
   @override
@@ -264,11 +259,7 @@ class _FilterPill extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _FilterPill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _FilterPill({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +286,6 @@ class _FilterPill extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
-
   const _SectionTitle({required this.title});
 
   @override
@@ -313,17 +303,27 @@ class _SectionTitle extends StatelessWidget {
 class _TemplateLibraryCard extends StatelessWidget {
   final Map<String, dynamic> template;
   final bool locked;
+  final VoidCallback onPreviewTap;
 
   const _TemplateLibraryCard({
     required this.template,
     required this.locked,
+    required this.onPreviewTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final isPremium = template['tier'] == 'premium';
-    final isPopular = template['popular'] == true;
-    final tags = List<String>.from(template['tags'] as List);
+    final isPopular = template['is_popular'] == true;
+    
+    // Récupération dynamique de la colonne d'image présente dans ta base Supabase
+    // Si la colonne s'appelle 'image_url' au lieu de 'thumbnail_url', change simplement le mot ici.
+    final String? imageUrl = template['thumbnail_url'] as String? ?? template['image_url'] as String?;
+
+    final rawTags = template['tags'];
+    final List<String> tags = rawTags is List 
+        ? List<String>.from(rawTags.map((e) => e.toString()))
+        : [];
 
     return Container(
       width: double.infinity,
@@ -343,27 +343,28 @@ class _TemplateLibraryCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(
-                    template['asset'] as String,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: AppColors.beigeCremeBase,
-                        alignment: Alignment.center,
-                        child: Icon(
-                          Icons.image_outlined,
-                          color: AppColors.violetRoyal.withValues(alpha: 0.42),
-                          size: AppSpacing.xl,
-                        ),
-                      );
-                    },
-                  ),
+                  // Rendu instantané et mis en cache globale (Zéro WebView locale, performance maximale)
+                  imageUrl != null && imageUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                          placeholder: (context, url) => Container(
+                            color: AppColors.beigeCremeBase,
+                            child: const Center(
+                              child: CircularProgressIndicator(color: AppColors.violetRoyal, strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => const _DefaultCardBackground(),
+                        )
+                      : const _DefaultCardBackground(),
+                      
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppColors.noirDoux.withValues(alpha: 0.72),
-                          AppColors.noirDoux.withValues(alpha: 0.08),
+                          AppColors.noirDoux.withValues(alpha: 0.35),
+                          AppColors.noirDoux.withValues(alpha: 0.02),
                           AppColors.noirDoux.withValues(alpha: 0.78),
                         ],
                         begin: Alignment.topCenter,
@@ -402,7 +403,7 @@ class _TemplateLibraryCard extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                template['name'] as String,
+                                (template['name'] as String? ?? ''),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.textTheme.displaySmall?.copyWith(
@@ -412,7 +413,7 @@ class _TemplateLibraryCard extends StatelessWidget {
                               ),
                               const SizedBox(height: AppSpacing.xs),
                               Text(
-                                template['description'] as String,
+                                (template['description'] as String? ?? ''),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.textTheme.bodySmall?.copyWith(
@@ -425,7 +426,7 @@ class _TemplateLibraryCard extends StatelessWidget {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: onPreviewTap,
                           style: TextButton.styleFrom(
                             backgroundColor: AppColors.blancCasse.withValues(alpha: 0.86),
                             foregroundColor: AppColors.violetRoyal,
@@ -494,16 +495,36 @@ class _TemplateLibraryCard extends StatelessWidget {
   }
 }
 
+class _DefaultCardBackground extends StatelessWidget {
+  const _DefaultCardBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.beigeCremeBase, AppColors.blancCasse],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.insert_invitation_rounded,
+          size: 48,
+          color: AppColors.violetRoyal.withValues(alpha: 0.20),
+        ),
+      ),
+    );
+  }
+}
+
 class _ImageBadge extends StatelessWidget {
   final String label;
   final Color color;
   final IconData? icon;
 
-  const _ImageBadge({
-    required this.label,
-    required this.color,
-    this.icon,
-  });
+  const _ImageBadge({required this.label, required this.color, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -535,7 +556,6 @@ class _ImageBadge extends StatelessWidget {
 
 class _TagChip extends StatelessWidget {
   final String label;
-
   const _TagChip({required this.label});
 
   @override
@@ -557,12 +577,8 @@ class _TagChip extends StatelessWidget {
   }
 }
 
-class _TemplateFilterData {
+class _EventFilterData {
   final String label;
   final String value;
-
-  const _TemplateFilterData({
-    required this.label,
-    required this.value,
-  });
+  const _EventFilterData({required this.label, required this.value});
 }

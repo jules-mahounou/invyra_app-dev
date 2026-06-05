@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
@@ -6,6 +7,7 @@ import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../services/import_service.dart';
 import '../services/guest_service.dart';
+import '../core/services/edge_function_service.dart';
 import '../screens/create_event/create_event_utils.dart';
 
 class GuestManagerWidget extends StatefulWidget {
@@ -15,14 +17,17 @@ class GuestManagerWidget extends StatefulWidget {
   const GuestManagerWidget({required this.eventId, this.onChanged, super.key});
 
   @override
-  State<GuestManagerWidget> createState() => _GuestManagerWidgetState();
+  State<GuestManagerWidget> createState() => GuestManagerWidgetState();
 }
 
-class _GuestManagerWidgetState extends State<GuestManagerWidget> {
+class GuestManagerWidgetState extends State<GuestManagerWidget> {
   final _guestService = GuestService();
   final _importService = ImportService();
 
   List<Map<String, dynamic>> _guests = [];
+  // Map pour stocker les liens d'invitations générés : { guestId: invitationUrl }
+  Map<String, String> _generatedLinks = {}; 
+  
   bool _sendViaWhatsApp = true;
   bool _sendViaEmail = false;
   bool _isLoading = true;
@@ -50,6 +55,76 @@ class _GuestManagerWidgetState extends State<GuestManagerWidget> {
         context,
         e.toString().replaceFirst('Exception: ', ''),
       );
+    }
+  }
+
+  /// Appelé par Step3Guests pour générer les billets sur Supabase
+  Future<void> triggerSendInvitations() async {
+    if (_guests.isEmpty) {
+      throw Exception('Veuillez ajouter au moins un invité avant de générer les billets.');
+    }
+
+    setState(() => _isBusy = true);
+    try {
+      // 1. On récupère la liste de tous les IDs d'invités
+      final List<String> guestIds = _guests
+          .map((g) => g['id']?.toString())
+          .whereType<String>()
+          .toList();
+
+      // 2. On appelle ton Edge Function
+      final List<InvitationResult> results = await _guestService.sendInvitations(
+        eventId: widget.eventId,
+        guestIds: guestIds,
+      );
+
+      // 3. On stocke les URLs générées localement pour l'affichage des boutons de partage
+      if (mounted) {
+        setState(() {
+          _generatedLinks = {
+            for (var res in results) res.guestId: res.invitationUrl
+          };
+        });
+      }
+    } on Exception catch (_) { 
+      rethrow;
+    } finally { // Corrigé ici : finally avec deux 'l'
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
+
+  /// Fonction pour ouvrir localement WhatsApp avec le message pré-rempli
+  Future<void> _shareOnWhatsApp(String phone, String guestName, String url) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '').replaceFirst('00', '+');
+    if (cleanPhone.isEmpty) {
+      throw 'Le numéro WhatsApp est vide.';
+    }
+
+    final message = "Bonjour $guestName ! Vous êtes invité à notre événement. "
+        "Voici votre billet d'accès unique à présenter à l'entrée : $url";
+
+    final whatsappSchemeUri = Uri.parse(
+      'whatsapp://send?phone=$cleanPhone&text=${Uri.encodeComponent(message)}',
+    );
+    final whatsappWebUri = Uri.parse(
+      'https://wa.me/$cleanPhone?text=${Uri.encodeComponent(message)}',
+    );
+
+    try {
+      await launchUrl(whatsappSchemeUri, mode: LaunchMode.externalApplication);
+      return;
+    } catch (_) {
+      try {
+        await launchUrl(whatsappWebUri, mode: LaunchMode.externalApplication);
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de l\'ouverture de WhatsApp : $e')),
+        );
+      }
     }
   }
 
@@ -224,19 +299,19 @@ class _GuestManagerWidgetState extends State<GuestManagerWidget> {
             const SizedBox(height: AppSpacing.lg),
             _ManualGuestsBlock(
               guests: _guests,
+              generatedLinks: _generatedLinks,
               onGuestAdd: _showAddGuestSheet,
               onGuestRemove: _removeGuest,
+              onShareWhatsApp: _shareOnWhatsApp,
             ),
             const SizedBox(height: AppSpacing.lg),
             _SendChannelsBlock(
               sendViaWhatsApp: _sendViaWhatsApp,
               sendViaEmail: _sendViaEmail,
-              onWhatsAppChanged: (value) =>
-                  setState(() => _sendViaWhatsApp = value),
+              onWhatsAppChanged: (value) => setState(() => _sendViaWhatsApp = value),
               onEmailChanged: (value) => setState(() => _sendViaEmail = value),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const _InvitationInfoCard(),
           ],
         ),
         if (_isBusy)
@@ -255,7 +330,6 @@ class _GuestManagerWidgetState extends State<GuestManagerWidget> {
 
 class _ImportGuestsBox extends StatelessWidget {
   final VoidCallback onTap;
-
   const _ImportGuestsBox({required this.onTap});
 
   @override
@@ -300,17 +374,23 @@ class _ImportGuestsBox extends StatelessWidget {
 
 class _ManualGuestsBlock extends StatelessWidget {
   final List<Map<String, dynamic>> guests;
+  final Map<String, String> generatedLinks;
   final VoidCallback onGuestAdd;
   final ValueChanged<Map<String, dynamic>> onGuestRemove;
+  final Function(String phone, String name, String url) onShareWhatsApp;
 
   const _ManualGuestsBlock({
     required this.guests,
+    required this.generatedLinks,
     required this.onGuestAdd,
     required this.onGuestRemove,
+    required this.onShareWhatsApp,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasLinks = generatedLinks.isNotEmpty;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -326,28 +406,34 @@ class _ManualGuestsBlock extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Ajout manuel (${guests.length})',
+                  hasLinks ? 'Vos billets sont prêts !' : 'Ajout manuel (${guests.length})',
                   style: AppTypography.textTheme.titleMedium?.copyWith(
                     color: AppColors.noirDoux,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: onGuestAdd,
-                icon: const Icon(Icons.add_rounded, size: AppSpacing.md),
-                label: const Text('Ajouter'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.violetRoyal,
-                  foregroundColor: AppColors.blancCasse,
+              if (!hasLinks)
+                ElevatedButton.icon(
+                  onPressed: onGuestAdd,
+                  icon: const Icon(Icons.add_rounded, size: AppSpacing.md),
+                  label: const Text('Ajouter'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.violetRoyal,
+                    foregroundColor: AppColors.blancCasse,
+                  ),
                 ),
-              ),
             ],
           ),
           if (guests.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             for (final guest in guests) ...[
-              _GuestTile(guest: guest, onRemove: () => onGuestRemove(guest)),
+              _GuestTile(
+                guest: guest,
+                invitationUrl: generatedLinks[guest['id']?.toString()],
+                onRemove: () => onGuestRemove(guest),
+                onShare: (phone, name, url) => onShareWhatsApp(phone, name, url),
+              ),
               if (guest != guests.last) const SizedBox(height: AppSpacing.sm),
             ],
           ],
@@ -359,21 +445,31 @@ class _ManualGuestsBlock extends StatelessWidget {
 
 class _GuestTile extends StatelessWidget {
   final Map<String, dynamic> guest;
+  final String? invitationUrl;
   final VoidCallback onRemove;
+  final Function(String phone, String name, String url) onShare;
 
-  const _GuestTile({required this.guest, required this.onRemove});
+  const _GuestTile({
+    required this.guest,
+    this.invitationUrl,
+    required this.onRemove,
+    required this.onShare,
+  });
 
   @override
   Widget build(BuildContext context) {
     final name = (guest['full_name'] ?? 'Invité') as String;
     final phone = (guest['phone'] ?? '') as String;
+    final isReady = invitationUrl != null;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.beigeCremeAlt,
+        color: isReady ? AppColors.success.withValues(alpha: 0.05) : AppColors.beigeCremeAlt,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: isReady ? AppColors.success.withValues(alpha: 0.3) : AppColors.noirDoux.withValues(alpha: 0.06),
+        ),
       ),
       child: Row(
         children: [
@@ -403,11 +499,22 @@ class _GuestTile extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            onPressed: onRemove,
-            icon: const Icon(Icons.delete_outline_rounded),
-            color: AppColors.error,
-          ),
+          isReady
+              ? ElevatedButton.icon(
+                  onPressed: () => onShare(phone, name, invitationUrl!),
+                  icon: const Icon(Icons.share_rounded, size: 18),
+                  label: const Text('WhatsApp'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  ),
+                )
+              : IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  color: AppColors.error,
+                ),
         ],
       ),
     );
@@ -445,16 +552,10 @@ class _SendChannelsBlock extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           children: [
             _SendChannelChip(
-              label: 'WhatsApp',
+              label: 'WhatsApp (Manuel)',
               color: AppColors.success,
               selected: sendViaWhatsApp,
               onSelected: onWhatsAppChanged,
-            ),
-            _SendChannelChip(
-              label: 'Email',
-              color: AppColors.info,
-              selected: sendViaEmail,
-              onSelected: onEmailChanged,
             ),
           ],
         ),
@@ -496,40 +597,7 @@ class _SendChannelChip extends StatelessWidget {
   }
 }
 
-class _InvitationInfoCard extends StatelessWidget {
-  const _InvitationInfoCard();
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.beigeCremeAlt,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.orAfricain.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.auto_awesome_rounded,
-            color: AppColors.orAfricain,
-            size: AppSpacing.lg,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              'Vos invitations seront prêtes à être envoyées sur WhatsApp dès la création.',
-              style: AppTypography.textTheme.bodyMedium?.copyWith(
-                color: AppColors.noirDoux,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _AddGuestSheet extends StatefulWidget {
   const _AddGuestSheet();
@@ -596,7 +664,7 @@ class _AddGuestSheetState extends State<_AddGuestSheet> {
                 controller: _emailController,
                 label: 'Email',
                 icon: Icons.mail_outline_rounded,
-                helperText: 'Pour envoi par email',
+                helperText: 'Optionnel',
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: AppSpacing.xl),

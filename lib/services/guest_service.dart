@@ -1,9 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/constants/supabase_schema.dart';
+import '../core/services/edge_function_service.dart';
 
 class GuestService {
   final _client = Supabase.instance.client;
+  final _edgeService = const EdgeFunctionService();
 
   Future<Map<String, dynamic>> addGuest({
     required String eventId,
@@ -52,6 +54,24 @@ class GuestService {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
       throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
+    }
+  }
+
+ 
+
+  Future<List<InvitationResult>> sendInvitations({
+    required String eventId,
+    required List<String> guestIds,
+  }) async {
+    try {
+      
+      return await _edgeService.sendInvitations(
+        eventId: eventId,
+        guestIds: guestIds,
+        channel: 'whatsapp',
+      );
+    } catch (e) {
+      throw Exception(e.toString().replaceFirst('Exception: ', ''));
     }
   }
 }

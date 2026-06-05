@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/supabase_schema.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_decorations.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -16,7 +17,7 @@ import '../create_event_utils.dart';
 
 /// Étape 1 — Informations de base et création de l'événement.
 class Step1BasicInfo extends StatefulWidget {
-  final void Function(String eventId, String eventType) onStepCompleted;
+  final void Function(String eventId, String eventType, Map<String, dynamic> customFields) onStepCompleted;
 
   const Step1BasicInfo({required this.onStepCompleted, super.key});
 
@@ -33,8 +34,14 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
   final _customTypeController = TextEditingController();
   final _placeController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _customField1LabelController = TextEditingController();
+  final _customField1ValueController = TextEditingController();
+  final _customField2LabelController = TextEditingController();
+  final _customField2ValueController = TextEditingController();
+  final _guestQuotaController = TextEditingController();
 
   String _selectedTypeLabel = kEventTypeDisplayValues.first;
+  String _selectedSendChannel = kDefaultSendChannel;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   Uint8List? _logoBytes;
@@ -47,6 +54,11 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
     _customTypeController.dispose();
     _placeController.dispose();
     _descriptionController.dispose();
+    _customField1LabelController.dispose();
+    _customField1ValueController.dispose();
+    _customField2LabelController.dispose();
+    _customField2ValueController.dispose();
+    _guestQuotaController.dispose();
     super.dispose();
   }
 
@@ -179,6 +191,41 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
       return;
     }
 
+    final customField1Label = _customField1LabelController.text.trim();
+    final customField1Value = _customField1ValueController.text.trim();
+    final customField2Label = _customField2LabelController.text.trim();
+    final customField2Value = _customField2ValueController.text.trim();
+
+    if ((customField1Label.isNotEmpty && customField1Value.isEmpty) ||
+        (customField1Label.isEmpty && customField1Value.isNotEmpty)) {
+      showCreateEventErrorSnackBar(
+        context,
+        'Les champs “Informations supplémentaires 1” doivent être remplis ensemble.',
+      );
+      return;
+    }
+    if ((customField2Label.isNotEmpty && customField2Value.isEmpty) ||
+        (customField2Label.isEmpty && customField2Value.isNotEmpty)) {
+      showCreateEventErrorSnackBar(
+        context,
+        'Les champs “Informations supplémentaires 2” doivent être remplis ensemble.',
+      );
+      return;
+    }
+
+    int? guestQuota;
+    final quotaText = _guestQuotaController.text.trim();
+    if (quotaText.isNotEmpty) {
+      guestQuota = int.tryParse(quotaText);
+      if (guestQuota == null || guestQuota < 0) {
+        showCreateEventErrorSnackBar(
+          context,
+          'Le quota invité doit être un nombre entier positif.',
+        );
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -198,6 +245,13 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
         selectedTime.minute,
       );
 
+      final metadata = {
+        'customField1Label': customField1Label.isEmpty ? null : customField1Label,
+        'customField1Value': customField1Value.isEmpty ? null : customField1Value,
+        'customField2Label': customField2Label.isEmpty ? null : customField2Label,
+        'customField2Value': customField2Value.isEmpty ? null : customField2Value,
+      };
+
       final eventId = await _eventService.createEvent(
         name: name,
         eventType: eventTypeKey,
@@ -209,6 +263,9 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
+        sendChannel: _selectedSendChannel,
+        guestQuota: guestQuota,
+        metadata: metadata,
       );
 
       if (_logoBytes != null && _logoFileName != null) {
@@ -228,7 +285,12 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
       }
 
       if (!mounted) return;
-      widget.onStepCompleted(eventId, eventTypeKey);
+      widget.onStepCompleted(eventId, eventTypeKey, {
+        'customField1Label': customField1Label,
+        'customField1Value': customField1Value,
+        'customField2Label': customField2Label,
+        'customField2Value': customField2Value,
+      });
     } catch (e) {
       if (!mounted) return;
       showCreateEventErrorSnackBar(
@@ -386,6 +448,23 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
                 icon: Icons.notes_rounded,
                 maxLines: 4,
               ),
+              const SizedBox(height: AppSpacing.lg),
+              _sectionTitle('Options de diffusion'),
+              const SizedBox(height: AppSpacing.sm),
+              _sendChannelChips(),
+              const SizedBox(height: AppSpacing.lg),
+              _fieldLabel('Quota invités (optionnel)'),
+              const SizedBox(height: AppSpacing.sm),
+              _styledField(
+                controller: _guestQuotaController,
+                hint: 'Ex: 120',
+                icon: Icons.people_outline,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _sectionTitle('Informations supplémentaires (optionnel)'),
+              const SizedBox(height: AppSpacing.sm),
+              _customInfoCard(),
               const SizedBox(height: AppSpacing.xl),
               SizedBox(
                 width: double.infinity,
@@ -434,6 +513,85 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
     );
   }
 
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: AppTypography.textTheme.titleMedium?.copyWith(
+        color: AppColors.noirDoux,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _sendChannelChips() {
+    final options = <String, String>{
+      'whatsapp': 'WhatsApp',
+      'email': 'Email',
+      'les_deux': 'Les deux',
+    };
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: options.entries.map((entry) {
+        final selected = _selectedSendChannel == entry.key;
+        return ChoiceChip(
+          label: Text(entry.value),
+          selected: selected,
+          onSelected: (_) => setState(() => _selectedSendChannel = entry.key),
+          selectedColor: AppColors.violetRoyal.withValues(alpha: 0.14),
+          labelStyle: AppTypography.textTheme.bodyMedium?.copyWith(
+            color: selected ? AppColors.violetRoyal : AppColors.noirDoux,
+            fontWeight: FontWeight.w600,
+          ),
+          side: BorderSide(
+            color: selected ? AppColors.violetRoyal : AppColors.orAfricain.withValues(alpha: 0.22),
+          ),
+          backgroundColor: AppColors.beigeCremeAlt,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _customInfoCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.beigeCremeAlt.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.orAfricain.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        children: [
+          _styledField(
+            controller: _customField1LabelController,
+            hint: 'Ex: Thème, Dress code, Âge...',
+            icon: Icons.label_outline,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _styledField(
+            controller: _customField1ValueController,
+            hint: 'Ex: Soirée blanche, Black tie, 30 ans...',
+            icon: Icons.edit_note_rounded,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _styledField(
+            controller: _customField2LabelController,
+            hint: 'Ex: Intervenant, RSVP avant le...',
+            icon: Icons.label_outline,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _styledField(
+            controller: _customField2ValueController,
+            hint: 'Ex: Dr. Amina Koné, 10 juin 2025...',
+            icon: Icons.edit_note_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
   InputDecoration _inputDecoration(IconData icon) {
     return InputDecoration(
       prefixIcon: Icon(icon, color: AppColors.violetRoyal),
@@ -457,10 +615,12 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
     required String hint,
     required IconData icon,
     int maxLines = 1,
+    TextInputType? keyboardType,
   }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
+      keyboardType: keyboardType,
       style: AppTypography.textTheme.bodyLarge,
       decoration: _inputDecoration(icon).copyWith(hintText: hint),
     );

@@ -120,7 +120,6 @@ class HomeTabContentState extends State<HomeTabContent> {
                   const SizedBox(height: AppSpacing.lg),
                   _StatsSection(
                     activeEvents: data.activeEvents,
-                    guestsConfirmed: data.guestsConfirmed,
                     invitesDispatched: data.invitesDispatched,
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -437,12 +436,10 @@ class _WelcomeCard extends StatelessWidget {
 
 class _StatsSection extends StatelessWidget {
   final int activeEvents;
-  final int guestsConfirmed;
   final int invitesDispatched;
 
   const _StatsSection({
     required this.activeEvents,
-    required this.guestsConfirmed,
     required this.invitesDispatched,
   });
 
@@ -454,12 +451,6 @@ class _StatsSection extends StatelessWidget {
         label: 'Événements actifs',
         value: activeEvents.toString(),
         color: AppColors.violetRoyal,
-      ),
-      _StatData(
-        icon: Icons.people_alt_rounded,
-        label: 'Invités confirmés',
-        value: guestsConfirmed.toString(),
-        color: AppColors.orAfricain,
       ),
       _StatData(
         icon: Icons.send_rounded,

@@ -1,16 +1,24 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/constants/app_assets.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../core/services/edge_function_service.dart';
 
 enum _ScanResultType { success, failure }
 
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  // L'ID est maintenant optionnel (String?) pour ne plus bloquer le MainScaffold
+  final String? eventId;
+
+  const ScanScreen({
+    super.key,
+    this.eventId,
+  });
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -18,8 +26,18 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _scanController;
+  final MobileScannerController _cameraController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  
   bool _flashEnabled = false;
   _ScanResultType? _resultType;
+  bool _isProcessing = false;
+  
+  String? _scannedGuestName;
+  String? _errorMessage;
+
+  final List<Map<String, dynamic>> _localHistory = [];
 
   @override
   void initState() {
@@ -33,7 +51,78 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     _scanController.dispose();
+    _cameraController.dispose();
     super.dispose();
+  }
+
+  Future<void> _onQrCodeDetected(BarcodeCapture capture) async {
+    if (_isProcessing || _resultType != null) return;
+
+    final List<Barcode> barcodes = capture.barcodes;
+    if (barcodes.isEmpty) return;
+
+    final String? qrCodeValue = barcodes.first.rawValue;
+    if (qrCodeValue == null || qrCodeValue.isEmpty) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      const edgeService = EdgeFunctionService();
+      
+      // On envoie la valeur du QR Code, et l'id s'il existe (sinon texte vide)
+      final validation = await edgeService.validateQr(
+        qrCode: qrCodeValue,
+        eventId: widget.eventId ?? '',
+      );
+
+      if (!mounted) return;
+
+      if (validation.result == 'valide' && validation.guest != null) {
+        setState(() {
+          _resultType = _ScanResultType.success;
+          _scannedGuestName = validation.guest!.fullName;
+          _errorMessage = null;
+          _localHistory.insert(0, {
+            'icon': Icons.check_circle_rounded,
+            'label': '${validation.guest!.fullName} — Succès',
+            'color': AppColors.success,
+          });
+        });
+      } else {
+        _setFailureState('Billet invalide ou déjà scanné.');
+      }
+    } catch (e) {
+      _setFailureState('Erreur de connexion au serveur.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  void _setFailureState(String msg) {
+    setState(() {
+      _resultType = _ScanResultType.failure;
+      _scannedGuestName = null;
+      _errorMessage = msg;
+      _localHistory.insert(0, {
+        'icon': Icons.cancel_rounded,
+        'label': 'Refusé — il y a un instant',
+        'color': AppColors.error,
+      });
+    });
+  }
+
+  void _resetScanner() {
+    setState(() {
+      _resultType = null;
+      _scannedGuestName = null;
+      _errorMessage = null;
+    });
   }
 
   @override
@@ -58,19 +147,28 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                   _ScanHeader(
                     flashEnabled: _flashEnabled,
                     onBack: () => Navigator.of(context).pop(),
-                    onFlashToggle: () => setState(() => _flashEnabled = !_flashEnabled),
+                    onFlashToggle: () async {
+                      await _cameraController.toggleTorch();
+                      setState(() => _flashEnabled = !_flashEnabled);
+                    },
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   Center(
-                    child: _ScanFrame(animation: _scanController),
+                    child: _ScanFrame(
+                      animation: _scanController,
+                      cameraController: _cameraController,
+                      onDetect: _onQrCodeDetected,
+                      showCamera: _resultType == null && !_isProcessing,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Center(
                     child: Text(
-                      'Placez le QR code dans le cadre',
+                      _isProcessing ? 'Vérification du billet...' : 'Placez le QR code dans le cadre',
                       textAlign: TextAlign.center,
                       style: AppTypography.textTheme.bodyMedium?.copyWith(
                         color: AppColors.blancCasse,
+                        fontWeight: _isProcessing ? FontWeight.w700 : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -79,19 +177,31 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                   if (kDebugMode) ...[
                     const SizedBox(height: AppSpacing.lg),
                     _DebugScanButtons(
-                      onSuccess: _simulerSucces,
-                      onFailure: _simulerEchec,
+                      onSuccess: () {
+                        setState(() {
+                          _resultType = _ScanResultType.success;
+                          _scannedGuestName = 'Simulé Test';
+                        });
+                      },
+                      onFailure: () {
+                        setState(() {
+                          _resultType = _ScanResultType.failure;
+                          _errorMessage = 'Billet simulé invalide.';
+                        });
+                      },
                     ),
                   ],
                   if (_resultType != null) ...[
                     const SizedBox(height: AppSpacing.lg),
                     _ScanResultCard(
                       type: _resultType!,
-                      onReset: () => setState(() => _resultType = null),
+                      guestName: _scannedGuestName,
+                      errorMessage: _errorMessage,
+                      onReset: _resetScanner,
                     ),
                   ],
                   const SizedBox(height: AppSpacing.xl),
-                  const _ScanHistory(),
+                  _ScanHistory(history: _localHistory),
                 ],
               ),
             ),
@@ -99,14 +209,6 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
         ),
       ),
     );
-  }
-
-  void _simulerSucces() {
-    setState(() => _resultType = _ScanResultType.success);
-  }
-
-  void _simulerEchec() {
-    setState(() => _resultType = _ScanResultType.failure);
   }
 }
 
@@ -145,8 +247,8 @@ class _ScanHeader extends StatelessWidget {
             style: AppTypography.textTheme.displaySmall?.copyWith(
               color: AppColors.blancCasse,
               fontWeight: FontWeight.w600,
-            ),
           ),
+        ),
         ),
         SizedBox(
           width: AppSpacing.xxl,
@@ -166,8 +268,16 @@ class _ScanHeader extends StatelessWidget {
 
 class _ScanFrame extends StatelessWidget {
   final Animation<double> animation;
+  final MobileScannerController cameraController;
+  final ValueChanged<BarcodeCapture> onDetect;
+  final bool showCamera;
 
-  const _ScanFrame({required this.animation});
+  const _ScanFrame({
+    required this.animation,
+    required this.cameraController,
+    required this.onDetect,
+    required this.showCamera,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -177,11 +287,19 @@ class _ScanFrame extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.42),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: showCamera
+                  ? MobileScanner(
+                      controller: cameraController,
+                      onDetect: onDetect,
+                    )
+                  : Container(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      child: const Center(
+                        child: CircularProgressIndicator(color: AppColors.violetRoyal),
+                      ),
+                    ),
             ),
           ),
           Positioned.fill(
@@ -189,31 +307,32 @@ class _ScanFrame extends StatelessWidget {
               painter: _ScannerCornerPainter(color: AppColors.violetRoyal),
             ),
           ),
-          AnimatedBuilder(
-            animation: animation,
-            builder: (context, child) {
-              return Positioned(
-                left: AppSpacing.lg,
-                right: AppSpacing.lg,
-                top: AppSpacing.lg + (280 - (AppSpacing.lg * 2) - AppSpacing.sm) * animation.value,
-                child: child!,
-              );
-            },
-            child: Container(
-              height: AppSpacing.sm,
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientPrincipal,
-                borderRadius: BorderRadius.circular(AppRadius.full),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.violetRoyal.withValues(alpha: 0.50),
-                    blurRadius: AppSpacing.md,
-                    spreadRadius: 1,
-                  ),
-                ],
+          if (showCamera)
+            AnimatedBuilder(
+              animation: animation,
+              builder: (context, child) {
+                return Positioned(
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  top: AppSpacing.lg + (280 - (AppSpacing.lg * 2) - AppSpacing.sm) * animation.value,
+                  child: child!,
+                );
+              },
+              child: Container(
+                height: AppSpacing.sm,
+                decoration: BoxDecoration(
+                  gradient: AppColors.gradientPrincipal,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.violetRoyal.withValues(alpha: 0.50),
+                      blurRadius: AppSpacing.md,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -299,7 +418,6 @@ class _DebugScanButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: retirer lors de l'intégration du vrai scanner
     return Row(
       children: [
         Expanded(
@@ -330,10 +448,14 @@ class _DebugScanButtons extends StatelessWidget {
 
 class _ScanResultCard extends StatelessWidget {
   final _ScanResultType type;
+  final String? guestName;
+  final String? errorMessage;
   final VoidCallback onReset;
 
   const _ScanResultCard({
     required this.type,
+    required this.guestName,
+    required this.errorMessage,
     required this.onReset,
   });
 
@@ -368,12 +490,10 @@ class _ScanResultCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           if (success) ...[
-            _ResultLine(label: 'Invité', value: 'Aïcha Kouassi'),
-            const SizedBox(height: AppSpacing.xs),
-            _ResultLine(label: 'Événement', value: 'Mariage Kouassi & Amani'),
+            _ResultLine(label: 'Invité', value: guestName ?? 'Inconnu'),
           ] else
             Text(
-              'Ce billet est invalide ou a déjà été utilisé.',
+              errorMessage ?? 'Ce billet est invalide ou a déjà été utilisé.',
               textAlign: TextAlign.center,
               style: AppTypography.textTheme.bodyMedium?.copyWith(
                 color: AppColors.blancCasse.withValues(alpha: 0.84),
@@ -465,10 +585,14 @@ class _ResultBadge extends StatelessWidget {
 }
 
 class _ScanHistory extends StatelessWidget {
-  const _ScanHistory();
+  final List<Map<String, dynamic>> history;
+
+  const _ScanHistory({required this.history});
 
   @override
   Widget build(BuildContext context) {
+    if (history.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -484,24 +608,15 @@ class _ScanHistory extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           child: Row(
-            children: const [
-              _HistoryChip(
-                icon: Icons.check_circle_rounded,
-                label: 'Kofi Mensah — il y a 2 min',
-                color: AppColors.success,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              _HistoryChip(
-                icon: Icons.check_circle_rounded,
-                label: 'Amani Kwesi — il y a 5 min',
-                color: AppColors.success,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              _HistoryChip(
-                icon: Icons.cancel_rounded,
-                label: 'Billet invalide — il y a 8 min',
-                color: AppColors.error,
-              ),
+            children: [
+              for (final scan in history) ...[
+                _HistoryChip(
+                  icon: scan['icon'] as IconData,
+                  label: scan['label'] as String,
+                  color: scan['color'] as Color,
+                ),
+                if (scan != history.last) const SizedBox(width: AppSpacing.sm),
+              ],
             ],
           ),
         ),
