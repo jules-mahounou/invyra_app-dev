@@ -26,7 +26,9 @@ class GuestManagerWidgetState extends State<GuestManagerWidget> {
 
   List<Map<String, dynamic>> _guests = [];
   // Map pour stocker les liens d'invitations générés : { guestId: invitationUrl }
-  Map<String, String> _generatedLinks = {}; 
+  Map<String, String> _generatedLinks = {};
+  // Compteur local du nombre d'envois WhatsApp effectués dans cette session
+  int _sentCount = 0;
   
   bool _sendViaWhatsApp = true;
   bool _sendViaEmail = false;
@@ -95,34 +97,69 @@ class GuestManagerWidgetState extends State<GuestManagerWidget> {
     }
   }
 
-  /// Fonction pour ouvrir localement WhatsApp avec le message pré-rempli
   Future<void> _shareOnWhatsApp(String phone, String guestName, String url) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '').replaceFirst('00', '+');
-    if (cleanPhone.isEmpty) {
-      throw 'Le numéro WhatsApp est vide.';
+    // Premier envoi → avertir que le template sera verrouillé
+    final isFirstSend = _generatedLinks.isNotEmpty && _sentCount == 0;
+    if (isFirstSend) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirmer l\'envoi'),
+          content: const Text(
+            'Une fois le premier billet envoyé, le template de votre invitation '
+            'sera définitivement verrouillé et ne pourra plus être modifié.\n\n'
+            'Assurez-vous d\'avoir bien vérifié l\'aperçu avant de continuer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Envoyer quand même'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
     }
 
-    final message = "Bonjour $guestName ! Vous êtes invité à notre événement. "
-        "Voici votre billet d'accès unique à présenter à l'entrée : $url";
+    // Nettoyage : on garde seulement chiffres et +, puis on normalise le préfixe
+    var cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    // Si le numéro commence par 00, remplacer par +
+    if (cleanPhone.startsWith('00')) {
+      cleanPhone = '+${cleanPhone.substring(2)}';
+    }
+    if (cleanPhone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Numéro WhatsApp manquant pour cet invité.')),
+        );
+      }
+      return;
+    }
 
-    final whatsappSchemeUri = Uri.parse(
-      'whatsapp://send?phone=$cleanPhone&text=${Uri.encodeComponent(message)}',
+    final message = Uri.encodeComponent(
+      'Bonjour $guestName ! Vous êtes invité(e) à notre événement. '
+      'Voici votre billet d\'accès unique à présenter à l\'entrée : $url',
     );
-    final whatsappWebUri = Uri.parse(
-      'https://wa.me/$cleanPhone?text=${Uri.encodeComponent(message)}',
-    );
+
+    // wa.me est plus fiable que le scheme whatsapp:// sur tous les appareils
+    final waUri = Uri.parse('https://wa.me/$cleanPhone?text=$message');
+    final nativeUri = Uri.parse('whatsapp://send?phone=$cleanPhone&text=$message');
 
     try {
-      await launchUrl(whatsappSchemeUri, mode: LaunchMode.externalApplication);
-      return;
+      await launchUrl(nativeUri, mode: LaunchMode.externalApplication);
+      if (mounted) setState(() => _sentCount++);
     } catch (_) {
       try {
-        await launchUrl(whatsappWebUri, mode: LaunchMode.externalApplication);
-        return;
+        await launchUrl(waUri, mode: LaunchMode.externalApplication);
+        if (mounted) setState(() => _sentCount++);
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de l\'ouverture de WhatsApp : $e')),
+          const SnackBar(content: Text('Impossible d\'ouvrir WhatsApp. Vérifiez que l\'application est installée.')),
         );
       }
     }
@@ -406,23 +443,23 @@ class _ManualGuestsBlock extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  hasLinks ? 'Vos billets sont prêts !' : 'Ajout manuel (${guests.length})',
+                  hasLinks ? 'Billets prêts (${guests.length})' : 'Invités (${guests.length})',
                   style: AppTypography.textTheme.titleMedium?.copyWith(
                     color: AppColors.noirDoux,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              if (!hasLinks)
-                ElevatedButton.icon(
-                  onPressed: onGuestAdd,
-                  icon: const Icon(Icons.add_rounded, size: AppSpacing.md),
-                  label: const Text('Ajouter'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.violetRoyal,
-                    foregroundColor: AppColors.blancCasse,
-                  ),
+              // Le bouton Ajouter est TOUJOURS visible
+              ElevatedButton.icon(
+                onPressed: onGuestAdd,
+                icon: const Icon(Icons.add_rounded, size: AppSpacing.md),
+                label: const Text('Ajouter'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.violetRoyal,
+                  foregroundColor: AppColors.blancCasse,
                 ),
+              ),
             ],
           ),
           if (guests.isNotEmpty) ...[

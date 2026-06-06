@@ -30,8 +30,17 @@ class GuestService {
           .single();
       return Map<String, dynamic>.from(response);
     } on PostgrestException catch (e) {
+      // Code 23505 = violation de contrainte unique (doublon)
+      if (e.code == '23505') {
+        final field = e.message.contains('phone') ? 'numéro de téléphone' : 'email';
+        throw Exception(
+          'Un invité avec ce $field est déjà dans la liste. '
+          'Chaque invité doit avoir un $field unique.',
+        );
+      }
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
     }
   }

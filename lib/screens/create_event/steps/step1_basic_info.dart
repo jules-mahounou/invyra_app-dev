@@ -481,9 +481,9 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Continuer'),
+                      Text('Créer l\'événement'),
                       SizedBox(width: AppSpacing.sm),
-                      Icon(Icons.arrow_forward_rounded, size: AppSpacing.lg),
+                      Icon(Icons.check_rounded, size: AppSpacing.lg),
                     ],
                   ),
                 ),

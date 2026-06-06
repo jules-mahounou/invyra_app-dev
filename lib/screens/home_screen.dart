@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../core/auth/account_type_ui.dart';
+import '../core/auth/auth_gate.dart';
 import '../core/constants/app_assets.dart';
 import '../core/constants/app_constants.dart';
 import '../core/models/home_dashboard_data.dart';
@@ -13,6 +13,7 @@ import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
 import '../core/widgets/app_shimmer.dart';
 import '../widgets/event_thumbnail.dart';
+import 'event_detail_screen.dart';
 
 class HomeTabContent extends StatefulWidget {
   final VoidCallback? onSeeAllEvents;
@@ -76,7 +77,6 @@ class HomeTabContentState extends State<HomeTabContent> {
     }
 
     final data = _data!;
-    final plan = _AccountPlan.from(data.accountType);
 
     return Material(
       color: AppColors.blancCasse,
@@ -101,33 +101,14 @@ class HomeTabContentState extends State<HomeTabContent> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _AccountBanner(
-                    plan: plan,
-                    quotaUsed: data.quotaUsed,
-                    quotaTotal: data.hasUnlimitedEvents
-                        ? null
-                        : data.quotaTotal,
-                  ),
-                  if (AccountTypeUi.showUpgradeBanner(data.planCode)) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    _SubscriptionUpgradeBanner(
-                      quotaUsed: data.quotaUsed,
-                      quotaMax: data.maxEvents,
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.lg),
                   _WelcomeCard(userName: data.firstName),
                   const SizedBox(height: AppSpacing.lg),
                   _StatsSection(
                     activeEvents: data.activeEvents,
                     invitesDispatched: data.invitesDispatched,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _QuotaCard(
-                    used: data.quotaUsed,
-                    total: data.maxEvents,
-                    plan: plan,
-                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _PlansButton(),
                   const SizedBox(height: AppSpacing.lg),
                   _EventListSection(
                     events: data.recentEvents,
@@ -232,154 +213,6 @@ class _HomeErrorView extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SubscriptionUpgradeBanner extends StatelessWidget {
-  final int quotaUsed;
-  final int? quotaMax;
-
-  const _SubscriptionUpgradeBanner({
-    required this.quotaUsed,
-    required this.quotaMax,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final quotaLabel = quotaMax != null ? '$quotaUsed/$quotaMax' : '$quotaUsed';
-
-    return InkWell(
-      onTap: () => Navigator.of(context).pushNamed('/subscription'),
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.violetRoyal.withValues(alpha: 0.82),
-              AppColors.orAfricain.withValues(alpha: 0.82),
-            ],
-            begin: AppColors.gradientPrincipal.begin,
-            end: AppColors.gradientPrincipal.end,
-          ),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.bolt_rounded,
-              color: AppColors.blancCasse,
-              size: AppSpacing.lg,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                "Vous utilisez $quotaLabel événements — Passez à Essentiel pour l'illimité",
-                style: AppTypography.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.blancCasse,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            TextButton(
-              onPressed: () => Navigator.of(context).pushNamed('/subscription'),
-              style: TextButton.styleFrom(
-                backgroundColor: AppColors.blancCasse,
-                foregroundColor: AppColors.violetRoyal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                ),
-                minimumSize: const Size(0, AppSpacing.xl),
-              ),
-              child: const Text('Voir les offres'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AccountBanner extends StatelessWidget {
-  final _AccountPlan plan;
-  final int quotaUsed;
-  final int? quotaTotal;
-
-  const _AccountBanner({
-    required this.plan,
-    required this.quotaUsed,
-    required this.quotaTotal,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: plan.gradient,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        boxShadow: [
-          BoxShadow(
-            color: plan.color.withValues(alpha: 0.16),
-            blurRadius: AppSpacing.xl,
-            offset: const Offset(0, AppSpacing.md),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  plan.isPremium
-                      ? 'Compte ${AppConstants.appName}'
-                      : 'Compte ${plan.label}',
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.blancCasse,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  plan.description,
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.blancCasse,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (quotaTotal != null) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _MiniQuotaProgress(
-                    used: quotaUsed,
-                    total: quotaTotal!,
-                    foregroundColor: AppColors.blancCasse,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Container(
-            width: AppSpacing.xxl + AppSpacing.lg,
-            height: AppSpacing.xxl + AppSpacing.lg,
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.blancCasse,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-            ),
-            child: plan.isPremium
-                ? Image.asset(AppAssets.logoMark, fit: BoxFit.contain)
-                : Icon(plan.icon, color: plan.color, size: AppSpacing.xl),
-          ),
-        ],
       ),
     );
   }
@@ -508,13 +341,6 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: AppDecorations.cardDecoration.copyWith(
         border: Border.all(color: data.color.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: data.color.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -559,123 +385,39 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _QuotaCard extends StatelessWidget {
-  final int used;
-  final int? total;
-  final _AccountPlan plan;
-
-  const _QuotaCard({
-    required this.used,
-    required this.total,
-    required this.plan,
-  });
+class _PlansButton extends StatelessWidget {
+  const _PlansButton();
 
   @override
   Widget build(BuildContext context) {
-    final isUnlimited = total == null;
-    final safeTotal = total ?? (used == 0 ? 1 : used);
-    final remaining = isUnlimited
-        ? null
-        : (safeTotal - used).clamp(0, safeTotal);
-    final percent = isUnlimited
-        ? 0
-        : (safeTotal <= 0 ? 0 : ((used / safeTotal) * 100).round());
-
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppDecorations.cardDecoration.copyWith(
-        color: AppColors.beigeCremeAlt,
-        border: Border.all(color: plan.color.withValues(alpha: 0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: plan.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Icon(
-                  Icons.auto_graph_rounded,
-                  color: plan.color,
-                  size: AppSpacing.lg,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Utilisation du quota',
-                      style: AppTypography.textTheme.titleMedium?.copyWith(
-                        color: AppColors.noirDoux,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      isUnlimited
-                          ? 'Événements illimités sur votre plan'
-                          : '$percent% de votre pack consommé',
-                      style: AppTypography.textTheme.bodySmall?.copyWith(
-                        color: AppColors.noirDoux.withValues(alpha: 0.70),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                ),
-                decoration: BoxDecoration(
-                  color: plan.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Text(
-                  isUnlimited ? '$used / Illimité' : '$used / $safeTotal',
-                  style: AppTypography.textTheme.labelLarge?.copyWith(
-                    color: plan.color,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+      child: OutlinedButton(
+        onPressed: () => Navigator.of(context).pushNamed('/subscription'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.orAfricain,
+          side: const BorderSide(color: AppColors.orAfricain, width: 1.5),
+          backgroundColor: AppColors.orAfricain.withValues(alpha: 0.04),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
-          if (!isUnlimited) ...[
-            const SizedBox(height: AppSpacing.md),
-            _MiniQuotaProgress(
-              used: used,
-              total: safeTotal,
-              foregroundColor: plan.color,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.workspace_premium_rounded, size: 18),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Voir les offres d\'abonnement',
+              style: AppTypography.textTheme.bodyMedium?.copyWith(
+                color: AppColors.orAfricain,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
             ),
           ],
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Plan ${plan.label}',
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Text(
-                isUnlimited ? 'Quota illimité' : '$remaining restants',
-                style: AppTypography.textTheme.bodySmall?.copyWith(
-                  color: AppColors.noirDoux.withValues(alpha: 0.70),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -773,157 +515,100 @@ class _EventListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = _EventStatus.fromDb(event.status);
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppDecorations.cardDecoration.copyWith(
-        color: AppColors.beigeCremeAlt,
-        border: Border.all(
-          color: status.backgroundColor.withValues(alpha: 0.14),
-        ),
+    return InkWell(
+      onTap: () => pushProtectedRoute(
+        context,
+        EventDetailScreen(eventId: event.id),
       ),
-      child: Row(
-        children: [
-          EventThumbnail(logoUrl: event.logoUrl, size: AppSpacing.xxl),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  formatEventDateShort(event.eventDate),
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.noirDoux.withValues(alpha: 0.70),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.place_outlined,
-                      color: AppColors.violetRoyal,
-                      size: AppSpacing.md,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppDecorations.cardDecoration.copyWith(
+          color: AppColors.beigeCremeAlt,
+          border: Border.all(
+            color: status.backgroundColor.withValues(alpha: 0.14),
+          ),
+        ),
+        child: Row(
+          children: [
+            EventThumbnail(logoUrl: event.logoUrl, size: AppSpacing.xxl),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Text(
-                        event.place,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.textTheme.bodySmall?.copyWith(
-                          color: AppColors.noirDoux.withValues(alpha: 0.70),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    formatEventDateShort(event.eventDate),
+                    style: AppTypography.textTheme.bodySmall?.copyWith(
+                      color: AppColors.noirDoux.withValues(alpha: 0.70),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.place_outlined,
+                        color: AppColors.violetRoyal,
+                        size: AppSpacing.md,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          event.place,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.textTheme.bodySmall?.copyWith(
+                            color: AppColors.noirDoux.withValues(alpha: 0.70),
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: status.backgroundColor,
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  child: Text(
+                    status.label,
+                    style: AppTypography.textTheme.labelSmall?.copyWith(
+                      color: status.foregroundColor,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.noirDoux.withValues(alpha: 0.35),
+                  size: AppSpacing.lg,
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: status.backgroundColor,
-              borderRadius: BorderRadius.circular(AppRadius.full),
-            ),
-            child: Text(
-              status.label,
-              style: AppTypography.textTheme.labelSmall?.copyWith(
-                color: status.foregroundColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
-  }
-}
-
-class _MiniQuotaProgress extends StatelessWidget {
-  final int used;
-  final int total;
-  final Color foregroundColor;
-
-  const _MiniQuotaProgress({
-    required this.used,
-    required this.total,
-    required this.foregroundColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final value = total <= 0 ? 0.0 : (used / total).clamp(0, 1).toDouble();
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: LinearProgressIndicator(
-        value: value,
-        minHeight: AppSpacing.sm,
-        backgroundColor: AppColors.beigeCremeBase,
-        valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
-      ),
-    );
-  }
-}
-
-class _AccountPlan {
-  final String label;
-  final String description;
-  final Color color;
-  final IconData icon;
-  final LinearGradient gradient;
-  final bool isPremium;
-
-  const _AccountPlan({
-    required this.label,
-    required this.description,
-    required this.color,
-    required this.icon,
-    required this.gradient,
-    this.isPremium = false,
-  });
-
-  factory _AccountPlan.from(String value) {
-    switch (value.toLowerCase()) {
-      case 'flex':
-        return const _AccountPlan(
-          label: 'Premium',
-          description: 'Accès complet aux expériences INVYRA.',
-          color: AppColors.orAfricain,
-          icon: Icons.workspace_premium_rounded,
-          gradient: AppColors.gradientLuxe,
-          isPremium: true,
-        );
-      case 'essentiel':
-        return const _AccountPlan(
-          label: 'Standard',
-          description: 'Les essentiels pour vos événements réguliers.',
-          color: AppColors.violetRoyalAlt,
-          icon: Icons.verified_user_rounded,
-          gradient: AppColors.gradientViolet,
-        );
-      default:
-        return const _AccountPlan(
-          label: 'Basique',
-          description: 'Un démarrage simple pour créer vos invitations.',
-          color: AppColors.noirDoux,
-          icon: Icons.person_outline_rounded,
-          gradient: AppColors.gradientPrincipal,
-        );
-    }
   }
 }
 

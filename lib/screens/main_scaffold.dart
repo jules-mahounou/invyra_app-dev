@@ -13,6 +13,7 @@ import '../core/constants/app_nav_icons.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../services/event_service.dart';
 import 'create_event_screen.dart';
 import 'events_screen.dart';
 import 'home_screen.dart';
@@ -38,6 +39,7 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   final _profileService = UserProfileService();
   final _notificationsService = NotificationsService();
+  final _eventService = EventService();
   final _homeKey = GlobalKey<HomeTabContentState>();
   final _eventsKey = GlobalKey<EventsScreenState>();
 
@@ -167,7 +169,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       bottomNavigationBar: _PersistentNavBar(
         currentIndex: _currentIndex,
         onChanged: _onNavChanged,
-        onScanTap: () => pushProtectedRoute(context, const ScanScreen()),
+        onScanTap: () => _openScanEventPicker(context),
       ),
     );
   }
@@ -208,6 +210,169 @@ class _MainScaffoldState extends State<MainScaffold> {
       _homeKey.currentState?.refresh();
     } else if (index == 1 && !_createEventOpen) {
       _eventsKey.currentState?.refresh();
+    }
+  }
+
+  Future<void> _openScanEventPicker(BuildContext context) async {
+    List<Map<String, dynamic>> events = [];
+    bool isLoading = true;
+    String? errorMessage;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.blancCasse,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            if (isLoading && events.isEmpty && errorMessage == null) {
+              _eventService.getMyEvents().then((result) {
+                setSheetState(() {
+                  events = result;
+                  isLoading = false;
+                });
+              }).catchError((e) {
+                setSheetState(() {
+                  errorMessage = e.toString().replaceFirst('Exception: ', '');
+                  isLoading = false;
+                });
+              });
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.lg),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.noirDoux.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(AppRadius.full),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      'Scanner les billets',
+                      style: AppTypography.textTheme.displaySmall?.copyWith(
+                        color: AppColors.noirDoux,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      "Sélectionnez l'événement dont vous voulez scanner les billets.",
+                      style: AppTypography.textTheme.bodyMedium?.copyWith(
+                        color: AppColors.noirDoux.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                        child: Center(child: CircularProgressIndicator(color: AppColors.violetRoyal)),
+                      )
+                    else if (errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                        child: Text(errorMessage!, style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.error)),
+                      )
+                    else if (events.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                        child: Center(
+                          child: Text(
+                            'Aucun événement trouvé.\nCréez un événement pour scanner des billets.',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.noirDoux.withValues(alpha: 0.6)),
+                          ),
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.45),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: events.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                          itemBuilder: (_, i) {
+                            final ev = events[i];
+                            final name = ev['name'] as String? ?? 'Événement';
+                            final eventId = ev['id'] as String;
+                            final status = ev['status'] as String? ?? 'a_venir';
+                            final eventDate = ev['event_date'] as String?;
+
+                            return InkWell(
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                pushProtectedRoute(context, ScanScreen(eventId: eventId, eventName: name));
+                              },
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
+                              child: Container(
+                                padding: const EdgeInsets.all(AppSpacing.md),
+                                decoration: BoxDecoration(
+                                  color: AppColors.beigeCremeAlt,
+                                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                                  border: Border.all(color: AppColors.violetRoyal.withValues(alpha: 0.10)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 44, height: 44,
+                                      decoration: BoxDecoration(gradient: AppColors.gradientPrincipal, borderRadius: BorderRadius.circular(AppRadius.md)),
+                                      child: const Icon(Icons.event_rounded, color: AppColors.blancCasse, size: 22),
+                                    ),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: AppColors.noirDoux)),
+                                          if (eventDate != null) ...[
+                                            const SizedBox(height: AppSpacing.xs),
+                                            Text(_formatEventDate(eventDate),
+                                              style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.noirDoux.withValues(alpha: 0.58))),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    _StatusDot(status: status),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    const Icon(Icons.qr_code_scanner_rounded, color: AppColors.violetRoyal, size: 22),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatEventDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate).toLocal();
+      const months = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+      return '${date.day} ${months[date.month - 1]}. ${date.year}';
+    } catch (_) {
+      return '';
     }
   }
 }
@@ -524,6 +689,26 @@ class _ShellAccountPlan {
       label: AccountTypeUi.badgeLabel(value),
       color: AccountTypeUi.badgeColor(value),
       icon: AccountTypeUi.badgeIcon(value),
+    );
+  }
+}
+
+class _StatusDot extends StatelessWidget {
+  final String status;
+  const _StatusDot({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      'en_cours' => AppColors.warning,
+      'termine'  => AppColors.success,
+      'cloture'  => AppColors.noirDoux,
+      _          => AppColors.info,
+    };
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

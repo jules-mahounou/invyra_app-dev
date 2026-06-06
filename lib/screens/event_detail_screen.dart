@@ -9,6 +9,7 @@ import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
 import '../models/event_model.dart';
 import '../services/event_service.dart';
+import 'scan_screen.dart';
 import 'web_preview_screen.dart';
 import '../widgets/guest_manager_widget.dart';
 import '../widgets/edit_event_sheet.dart';
@@ -138,7 +139,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (context) => EditEventSheet(event: event),
+      builder: (context) => EditEventSheet(event: event, invitationsSent: event.invitationsSent),
     );
     if (saved != true) return;
     _showSuccess('Événement modifié avec succès');
@@ -327,6 +328,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 _InvitationPreviewCard(
                                   webTemplateKey: _webTemplateKey,
                                   eventName: event.name,
+                                  hasTemplateChosen: _webTemplateKey != null && _webTemplateKey!.isNotEmpty,
                                 ),
                                 
                                 const SizedBox(height: AppSpacing.lg),
@@ -356,17 +358,51 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           },
         ),
       ),
-      // LE BOUTON DE RETOUR FIXÉ AU BAS DE L'ÉCRAN SANS PHRASE D'INFORMATION
+      // DEUX BOUTONS EN BAS : générer les invitations + scanner
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: _GradientActionButton(
-            label: 'Générer les invitations',
-            icon: Icons.send_rounded,
-            onPressed: () {
-              // Déclenche l'action de génération globale dans le GuestManagerWidget
-              _guestManagerKey.currentState?.triggerSendInvitations();
-            },
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+          child: Row(
+            children: [
+              // Bouton Scanner (secondaire)
+              Expanded(
+                flex: 1,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ScanScreen(
+                          eventId: widget.eventId,
+                          eventName: event.name,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Scanner'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.violetRoyal,
+                    side: const BorderSide(color: AppColors.violetRoyal),
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              // Bouton Générer les invitations (principal)
+              Expanded(
+                flex: 2,
+                child: _GradientActionButton(
+                  label: 'Générer les billets',
+                  icon: Icons.send_rounded,
+                  onPressed: () {
+                    _guestManagerKey.currentState?.triggerSendInvitations();
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -667,10 +703,12 @@ class _InformationBlock extends StatelessWidget {
 class _InvitationPreviewCard extends StatelessWidget {
   final String? webTemplateKey;
   final String eventName;
+  final bool hasTemplateChosen;
 
   const _InvitationPreviewCard({
     required this.webTemplateKey,
     required this.eventName,
+    required this.hasTemplateChosen,
   });
 
   @override
@@ -700,7 +738,9 @@ class _InvitationPreviewCard extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      "Visualisez le rendu final de votre invitation animée.",
+                      hasTemplateChosen
+                          ? "Visualisez le rendu final de votre invitation animée."
+                          : "Aucun template choisi pour le moment.",
                       style: AppTypography.textTheme.bodySmall?.copyWith(
                         color: AppColors.noirDoux.withValues(alpha: 0.6),
                       ),
@@ -711,25 +751,42 @@ class _InvitationPreviewCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               ElevatedButton.icon(
                 onPressed: () {
-                  if (webTemplateKey != null && webTemplateKey!.isNotEmpty) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => WebPreviewScreen(
-                          webTemplateKey: webTemplateKey!,
-                          templateName: eventName,
+                  if (!hasTemplateChosen) {
+                    // Pas de template → guider l'utilisateur
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Aucun template choisi'),
+                        content: const Text(
+                          'Vous devez d\'abord choisir un template d\'invitation.\n\n'
+                          'Appuyez sur le menu ⋮ puis "Modifier l\'événement" pour sélectionner votre template.',
                         ),
+                        actions: [
+                          FilledButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('Compris'),
+                          ),
+                        ],
                       ),
                     );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Aperçu en ligne indisponible pour ce modèle.")),
-                    );
+                    return;
                   }
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => WebPreviewScreen(
+                        webTemplateKey: webTemplateKey!,
+                        templateName: eventName,
+                      ),
+                    ),
+                  );
                 },
-                icon: const Icon(Icons.visibility_rounded, size: 18),
-                label: const Text('Aperçu'),
+                icon: Icon(
+                  hasTemplateChosen ? Icons.visibility_rounded : Icons.palette_outlined,
+                  size: 18,
+                ),
+                label: Text(hasTemplateChosen ? 'Aperçu' : 'Choisir'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.violetRoyal,
+                  backgroundColor: hasTemplateChosen ? AppColors.violetRoyal : AppColors.orAfricain,
                   foregroundColor: AppColors.blancCasse,
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 ),

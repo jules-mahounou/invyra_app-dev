@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -9,15 +8,17 @@ import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/services/edge_function_service.dart';
 
-enum _ScanResultType { success, failure }
+enum _ScanResultType { success, alreadyUsed, failure }
 
 class ScanScreen extends StatefulWidget {
   // L'ID est maintenant optionnel (String?) pour ne plus bloquer le MainScaffold
   final String? eventId;
+  final String? eventName;
 
   const ScanScreen({
     super.key,
     this.eventId,
+    this.eventName,
   });
 
   @override
@@ -86,14 +87,25 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
           _errorMessage = null;
           _localHistory.insert(0, {
             'icon': Icons.check_circle_rounded,
-            'label': '${validation.guest!.fullName} — Succès',
+            'label': '${validation.guest!.fullName} — Accès autorisé',
             'color': AppColors.success,
           });
         });
+      } else if (validation.result == 'deja_utilise') {
+        final guestName = validation.guest?.fullName;
+        setState(() {
+          _resultType = _ScanResultType.alreadyUsed;
+          _scannedGuestName = guestName;
+          _errorMessage = null;
+          _localHistory.insert(0, {
+            'icon': Icons.warning_amber_rounded,
+            'label': guestName != null ? '$guestName — Déjà scanné' : 'Billet déjà scanné',
+            'color': AppColors.warning,
+          });
+        });
       } else {
-        _setFailureState('Billet invalide ou déjà scanné.');
-      }
-    } catch (e) {
+        _setFailureState('Billet invalide ou ne correspond pas à cet événement.');
+      }    } catch (e) {
       _setFailureState('Erreur de connexion au serveur.');
     } finally {
       if (mounted) {
@@ -145,6 +157,9 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _ScanHeader(
+                    title: widget.eventName != null
+                        ? 'Scanner — ${widget.eventName}'
+                        : 'Scanner un billet',
                     flashEnabled: _flashEnabled,
                     onBack: () => Navigator.of(context).pop(),
                     onFlashToggle: () async {
@@ -174,23 +189,6 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   const _ScanHelpBubble(),
-                  if (kDebugMode) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    _DebugScanButtons(
-                      onSuccess: () {
-                        setState(() {
-                          _resultType = _ScanResultType.success;
-                          _scannedGuestName = 'Simulé Test';
-                        });
-                      },
-                      onFailure: () {
-                        setState(() {
-                          _resultType = _ScanResultType.failure;
-                          _errorMessage = 'Billet simulé invalide.';
-                        });
-                      },
-                    ),
-                  ],
                   if (_resultType != null) ...[
                     const SizedBox(height: AppSpacing.lg),
                     _ScanResultCard(
@@ -213,11 +211,13 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
 }
 
 class _ScanHeader extends StatelessWidget {
+  final String title;
   final bool flashEnabled;
   final VoidCallback onBack;
   final VoidCallback onFlashToggle;
 
   const _ScanHeader({
+    required this.title,
     required this.flashEnabled,
     required this.onBack,
     required this.onFlashToggle,
@@ -240,7 +240,7 @@ class _ScanHeader extends StatelessWidget {
         ),
         Expanded(
           child: Text(
-            'Scanner un billet',
+            title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -407,45 +407,6 @@ class _ScanHelpBubble extends StatelessWidget {
   }
 }
 
-class _DebugScanButtons extends StatelessWidget {
-  final VoidCallback onSuccess;
-  final VoidCallback onFailure;
-
-  const _DebugScanButtons({
-    required this.onSuccess,
-    required this.onFailure,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton(
-            onPressed: onSuccess,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: AppColors.blancCasse,
-            ),
-            child: const Text('Simuler succès'),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: onFailure,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: AppColors.blancCasse,
-            ),
-            child: const Text('Simuler échec'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ScanResultCard extends StatelessWidget {
   final _ScanResultType type;
   final String? guestName;
@@ -462,7 +423,12 @@ class _ScanResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final success = type == _ScanResultType.success;
-    final color = success ? AppColors.success : AppColors.error;
+    final alreadyUsed = type == _ScanResultType.alreadyUsed;
+    final color = success
+        ? AppColors.success
+        : alreadyUsed
+            ? AppColors.warning
+            : AppColors.error;
 
     return Container(
       width: double.infinity,
@@ -475,13 +441,21 @@ class _ScanResultCard extends StatelessWidget {
       child: Column(
         children: [
           Icon(
-            success ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            success
+                ? Icons.check_circle_rounded
+                : alreadyUsed
+                    ? Icons.warning_amber_rounded
+                    : Icons.cancel_rounded,
             color: color,
             size: AppSpacing.xxl,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            success ? 'Accès autorisé' : 'Accès refusé',
+            success
+                ? 'Accès autorisé'
+                : alreadyUsed
+                    ? 'Billet déjà utilisé'
+                    : 'Accès refusé',
             textAlign: TextAlign.center,
             style: AppTypography.textTheme.displaySmall?.copyWith(
               color: color,
@@ -489,11 +463,21 @@ class _ScanResultCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          if (success) ...[
-            _ResultLine(label: 'Invité', value: guestName ?? 'Inconnu'),
+          if (success || alreadyUsed) ...[
+            if (guestName != null) _ResultLine(label: 'Invité', value: guestName!),
+            if (alreadyUsed) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Ce billet a déjà été scanné à l\'entrée.',
+                textAlign: TextAlign.center,
+                style: AppTypography.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.blancCasse.withValues(alpha: 0.84),
+                ),
+              ),
+            ],
           ] else
             Text(
-              errorMessage ?? 'Ce billet est invalide ou a déjà été utilisé.',
+              errorMessage ?? 'Ce billet est invalide ou ne correspond pas à cet événement.',
               textAlign: TextAlign.center,
               style: AppTypography.textTheme.bodyMedium?.copyWith(
                 color: AppColors.blancCasse.withValues(alpha: 0.84),
@@ -501,7 +485,11 @@ class _ScanResultCard extends StatelessWidget {
             ),
           const SizedBox(height: AppSpacing.md),
           _ResultBadge(
-            label: success ? 'Billet valide' : 'Billet invalide',
+            label: success
+                ? 'Billet valide'
+                : alreadyUsed
+                    ? 'Déjà scanné'
+                    : 'Billet invalide',
             color: color,
           ),
           const SizedBox(height: AppSpacing.lg),

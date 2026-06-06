@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_typography.dart';
 import 'create_event_utils.dart';
 import 'steps/step1_basic_info.dart';
-import 'steps/step2_template.dart';
-import 'steps/step3_guests.dart';
 
-/// Écran principal de création d'événement — gère le stepper et l'état partagé.
-class CreateEventScreen extends StatefulWidget {
+/// Écran de création d'événement — une seule étape (infos de base).
+/// Après création, l'utilisateur est redirigé vers EventDetailScreen.
+class CreateEventScreen extends StatelessWidget {
   final String accountType;
   final VoidCallback? onBack;
 
@@ -20,59 +20,7 @@ class CreateEventScreen extends StatefulWidget {
   });
 
   @override
-  State<CreateEventScreen> createState() => _CreateEventScreenState();
-}
-
-class _CreateEventScreenState extends State<CreateEventScreen> {
-  String? _eventId;
-  String? _eventType;
-
-  int _currentStep = 1;
-
-  void _onStep1Completed(String eventId, String eventType, Map<String, dynamic> customFields) {
-    setState(() {
-      _eventId = eventId;
-      _eventType = eventType;
-      _currentStep = 2;
-    });
-  }
-
-  void _onStep2Completed(String _) {
-    setState(() => _currentStep = 3);
-  }
-
-  void _finishCreation({required bool showSuccessMessage}) {
-    if (showSuccessMessage) {
-      showCreateEventSuccessSnackBar(context, 'Événement créé avec succès !');
-    }
-    widget.onBack?.call();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    Widget stepContent;
-    switch (_currentStep) {
-      case 1:
-        stepContent = Step1BasicInfo(onStepCompleted: _onStep1Completed);
-      case 2:
-        stepContent = Step2Template(
-          eventId: _eventId!,
-          eventType: _eventType!,
-          accountType: widget.accountType,
-          onStepCompleted: _onStep2Completed,
-          onBack: () => setState(() => _currentStep = 1),
-        );
-      case 3:
-        stepContent = Step3Guests(
-          eventId: _eventId!,
-          onCreateAndSend: () => _finishCreation(showSuccessMessage: true),
-          onFinishWithoutSending: () => _finishCreation(showSuccessMessage: false),
-          onBackToEvents: () => _finishCreation(showSuccessMessage: false),
-        );
-      default:
-        stepContent = const SizedBox.shrink();
-    }
-
     return Material(
       color: AppColors.blancCasse,
       child: Center(
@@ -89,19 +37,84 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CreateEventHero(
-                  currentStep: _currentStep,
-                  onBack: _currentStep == 1 ? widget.onBack : null,
+                _CreateEventHeader(onBack: onBack),
+                const SizedBox(height: AppSpacing.xl),
+                Step1BasicInfo(
+                  onStepCompleted: (eventId, eventType, _) {
+                    // Redirection directe vers EventDetailScreen
+                    onBack?.call();
+                    showCreateEventSuccessSnackBar(
+                      context,
+                      'Événement créé ! Ajoutez vos invités et choisissez un template.',
+                    );
+                  },
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                CreateEventStepIndicator(currentStep: _currentStep),
-                const SizedBox(height: AppSpacing.xl),
-                stepContent,
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Version tab (utilisée dans MainScaffold via IndexedStack)
+class CreateEventTabContent extends StatelessWidget {
+  final String accountType;
+  final VoidCallback? onBack;
+
+  const CreateEventTabContent({
+    super.key,
+    this.accountType = 'gratuit',
+    this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CreateEventScreen(accountType: accountType, onBack: onBack);
+  }
+}
+
+class _CreateEventHeader extends StatelessWidget {
+  final VoidCallback? onBack;
+
+  const _CreateEventHeader({this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (onBack != null) ...[
+          TextButton.icon(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded, size: AppSpacing.lg),
+            label: const Text('Retour aux événements'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.violetRoyal,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        Text(
+          'Créer un événement',
+          style: AppTypography.textTheme.displayLarge?.copyWith(
+            color: AppColors.noirDoux,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Renseignez les informations de votre événement. Vous pourrez choisir un template et ajouter vos invités depuis l\'écran de l\'événement.',
+          style: AppTypography.textTheme.bodyLarge?.copyWith(
+            color: AppColors.noirDoux.withValues(alpha: 0.72),
+          ),
+        ),
+      ],
     );
   }
 }
