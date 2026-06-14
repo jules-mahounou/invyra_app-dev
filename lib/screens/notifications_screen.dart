@@ -40,21 +40,53 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final notifications = await _service.fetchAll();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _notifications = notifications;
         _isLoading = false;
       });
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = 'Impossible de charger les notifications';
       });
+    }
+  }
+
+  Future<void> _deleteNotification(AppNotification notification) async {
+    setState(() => _notifications.removeWhere((n) => n.id == notification.id));
+    try {
+      await _service.deleteNotification(notification.id);
+    } catch (_) {
+      if (!mounted) return;
+      await _loadNotifications();
+    }
+  }
+
+  Future<void> _deleteAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer toutes les notifications ?'),
+        content: const Text('Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _notifications.clear());
+    try {
+      await _service.deleteAllNotifications();
+    } catch (_) {
+      if (!mounted) return;
+      await _loadNotifications();
     }
   }
 
@@ -135,71 +167,84 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Material(
       color: AppColors.blancCasse,
       child: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-          child: _isLoading
-              ? const _NotificationsLoadingView()
-              : _errorMessage != null
-                  ? _NotificationsErrorView(message: _errorMessage!, onRetry: _loadNotifications)
-                  : SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _NotificationsHeader(
-                            onBack: () => Navigator.of(context).pop(),
-                            onReadAll: _markAllAsRead,
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _NotificationFilters(
-                            selectedFilter: _selectedFilter,
-                            onChanged: (value) => setState(() => _selectedFilter = value),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          if (filteredNotifications.isEmpty)
-                            const _EmptyNotifications()
-                          else
-                            for (final notification in filteredNotifications) ...[
-                              _NotificationCard(
-                                notification: notification,
-                                onTap: () => _markAsRead(notification),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
+            child: _isLoading
+                ? const _NotificationsLoadingView()
+                : _errorMessage != null
+                    ? _NotificationsErrorView(message: _errorMessage!, onRetry: _loadNotifications)
+                    : RefreshIndicator(
+                        color: AppColors.violetRoyal,
+                        onRefresh: _loadNotifications,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _NotificationsHeader(
+                                onBack: () => Navigator.of(context).pop(),
+                                onReadAll: _markAllAsRead,
+                                onDeleteAll: _notifications.isNotEmpty ? _deleteAll : null,
                               ),
-                              if (notification != filteredNotifications.last)
-                                const SizedBox(height: AppSpacing.md),
-                            ],
-                          if (_hasUnread) ...[
-                            const SizedBox(height: AppSpacing.xl),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _markAllAsRead,
-                                icon: const Icon(Icons.done_all_rounded, size: AppSpacing.lg),
-                                label: const Text('Marquer tout comme lu'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.violetRoyal,
-                                  side: const BorderSide(color: AppColors.violetRoyal),
-                                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                              const SizedBox(height: AppSpacing.lg),
+                              _NotificationFilters(
+                                selectedFilter: _selectedFilter,
+                                onChanged: (value) => setState(() => _selectedFilter = value),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              if (filteredNotifications.isEmpty)
+                                const _EmptyNotifications()
+                              else
+                                for (final notification in filteredNotifications) ...[
+                                  Dismissible(
+                                    key: Key(notification.id),
+                                    direction: DismissDirection.endToStart,
+                                    background: Container(
+                                      alignment: Alignment.centerRight,
+                                      padding: const EdgeInsets.only(right: AppSpacing.lg),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.error.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                                      ),
+                                      child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                                    ),
+                                    onDismissed: (_) => _deleteNotification(notification),
+                                    child: _NotificationCard(
+                                      notification: notification,
+                                      onTap: () => _markAsRead(notification),
+                                    ),
+                                  ),
+                                  if (notification != filteredNotifications.last)
+                                    const SizedBox(height: AppSpacing.md),
+                                ],
+                              if (_hasUnread) ...[
+                                const SizedBox(height: AppSpacing.xl),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _markAllAsRead,
+                                    icon: const Icon(Icons.done_all_rounded, size: AppSpacing.lg),
+                                    label: const Text('Marquer tout comme lu'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.violetRoyal,
+                                      side: const BorderSide(color: AppColors.violetRoyal),
+                                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ],
-                        ],
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+          ),
         ),
       ),
-    ),
     );
   }
 }
-
 class _NotificationsLoadingView extends StatelessWidget {
   const _NotificationsLoadingView();
 
@@ -271,10 +316,12 @@ class _NotificationsErrorView extends StatelessWidget {
 class _NotificationsHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onReadAll;
+  final VoidCallback? onDeleteAll;
 
   const _NotificationsHeader({
     required this.onBack,
     required this.onReadAll,
+    this.onDeleteAll,
   });
 
   @override
@@ -306,14 +353,34 @@ class _NotificationsHeader extends StatelessWidget {
         ),
         SizedBox(
           width: 82,
-          child: TextButton(
-            onPressed: onReadAll,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.violetRoyal,
-              padding: EdgeInsets.zero,
-              textStyle: AppTypography.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            child: const Text('Tout lire'),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: onReadAll,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
+                  child: Text(
+                    'Tout lire',
+                    style: AppTypography.textTheme.bodySmall?.copyWith(
+                      color: AppColors.violetRoyal,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              if (onDeleteAll != null)
+                InkWell(
+                  onTap: onDeleteAll,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    child: Icon(Icons.delete_sweep_outlined, color: AppColors.error, size: AppSpacing.lg),
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -334,7 +401,6 @@ class _NotificationFilters extends StatelessWidget {
     _FilterData(label: 'Toutes', value: 'toutes'),
     _FilterData(label: 'Non lues', value: 'non_lues'),
     _FilterData(label: 'Système', value: 'systeme'),
-    _FilterData(label: 'Offres', value: 'offres'),
   ];
 
   @override

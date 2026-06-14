@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../core/constants/app_constants.dart';
+import '../core/services/user_profile_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
@@ -9,6 +10,7 @@ import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
 import '../models/event_model.dart';
 import '../services/event_service.dart';
+import 'create_event/steps/step2_template.dart';
 import 'scan_screen.dart';
 import 'web_preview_screen.dart';
 import '../widgets/guest_manager_widget.dart';
@@ -27,18 +29,29 @@ String? _webTemplateKey;
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   final _eventService = EventService();
+  final _profileService = UserProfileService();
   
-  // Clé globale pour contrôler les actions du GuestManagerWidget depuis le bouton du bas
   final GlobalKey<GuestManagerWidgetState> _guestManagerKey = GlobalKey<GuestManagerWidgetState>();
 
   EventModel? _event;
   bool _isLoading = true;
   String? _errorMessage;
+  String _accountType = 'gratuit'; // chargé dès l'init
 
   @override
   void initState() {
     super.initState();
     _loadEvent();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await _profileService.fetch();
+      if (mounted) setState(() => _accountType = profile.accountType);
+    } catch (_) {
+      // garde la valeur par défaut 'gratuit' en cas d'erreur
+    }
   }
 
   Future<void> _loadEvent() async {
@@ -139,7 +152,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (context) => EditEventSheet(event: event, invitationsSent: event.invitationsSent),
+      builder: (context) => EditEventSheet(event: event, invitationsSent: event.invitationsSent, accountType: _accountType),
     );
     if (saved != true) return;
     _showSuccess('Événement modifié avec succès');
@@ -329,6 +342,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   webTemplateKey: _webTemplateKey,
                                   eventName: event.name,
                                   hasTemplateChosen: _webTemplateKey != null && _webTemplateKey!.isNotEmpty,
+                                  event: event,
+                                  accountType: _accountType,
+                                  onTemplateChosen: () async {
+                                    await _loadEvent();
+                                  },
                                 ),
                                 
                                 const SizedBox(height: AppSpacing.lg),
@@ -397,8 +415,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 child: _GradientActionButton(
                   label: 'Générer les billets',
                   icon: Icons.send_rounded,
-                  onPressed: () {
-                    _guestManagerKey.currentState?.triggerSendInvitations();
+                  onPressed: () async {
+                    try {
+                      await _guestManagerKey.currentState?.triggerSendInvitations();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Billets générés avec succès ✓'),
+                            backgroundColor: AppColors.success,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        _showError(e.toString().replaceFirst('Exception: ', ''));
+                      }
+                    }
                   },
                 ),
               ),
@@ -704,12 +737,63 @@ class _InvitationPreviewCard extends StatelessWidget {
   final String? webTemplateKey;
   final String eventName;
   final bool hasTemplateChosen;
+  final EventModel event;
+  final String accountType;
+  final VoidCallback onTemplateChosen;
 
   const _InvitationPreviewCard({
     required this.webTemplateKey,
     required this.eventName,
     required this.hasTemplateChosen,
+    required this.event,
+    required this.accountType,
+    required this.onTemplateChosen,
   });
+
+  void _openTemplateSelection(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.blancCasse,
+          appBar: AppBar(
+            backgroundColor: AppColors.blancCasse,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.close_rounded, color: AppColors.violetRoyal),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Choisir un template',
+              style: AppTypography.textTheme.displaySmall?.copyWith(
+                color: AppColors.noirDoux,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Step2Template(
+              eventId: event.id,
+              eventType: event.eventType,
+              accountType: accountType,
+              onStepCompleted: (_) {
+                Navigator.of(context).pop();
+                onTemplateChosen();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Template enregistré ✓'),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              onBack: () => Navigator.of(context).pop(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -739,8 +823,8 @@ class _InvitationPreviewCard extends StatelessWidget {
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       hasTemplateChosen
-                          ? "Visualisez le rendu final de votre invitation animée."
-                          : "Aucun template choisi pour le moment.",
+                          ? "Visualisez le rendu avec les vraies données de l'événement."
+                          : "Choisissez un template pour votre invitation.",
                       style: AppTypography.textTheme.bodySmall?.copyWith(
                         color: AppColors.noirDoux.withValues(alpha: 0.6),
                       ),
@@ -752,23 +836,7 @@ class _InvitationPreviewCard extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: () {
                   if (!hasTemplateChosen) {
-                    // Pas de template → guider l'utilisateur
-                    showDialog<void>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Aucun template choisi'),
-                        content: const Text(
-                          'Vous devez d\'abord choisir un template d\'invitation.\n\n'
-                          'Appuyez sur le menu ⋮ puis "Modifier l\'événement" pour sélectionner votre template.',
-                        ),
-                        actions: [
-                          FilledButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('Compris'),
-                          ),
-                        ],
-                      ),
-                    );
+                    _openTemplateSelection(context);
                     return;
                   }
                   Navigator.of(context).push(
@@ -776,6 +844,7 @@ class _InvitationPreviewCard extends StatelessWidget {
                       builder: (context) => WebPreviewScreen(
                         webTemplateKey: webTemplateKey!,
                         templateName: eventName,
+                        event: event,
                       ),
                     ),
                   );

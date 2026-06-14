@@ -142,7 +142,6 @@ class EventService {
   }
 
   /// Récupère les détails complets d'un événement par son ID
-  /// AJOUT INDISPENSABLE de web_template_key dans la jointure event_templates
   Future<Map<String, dynamic>> getEventById(String eventId) async {
     try {
       final response = await _client
@@ -150,12 +149,22 @@ class EventService {
           .select('''
             *,
             guests(id, full_name, phone, email, import_source, created_at),
-            event_templates(id, name, tier, asset_path, preview_url, class_name, web_template_key)
+            event_templates(id, name, tier, asset_path, preview_url, class_name, web_template_key),
+            invitations(status)
           ''')
           .eq('id', eventId)
           .eq('user_id', _client.auth.currentUser!.id)
           .single();
-      return Map<String, dynamic>.from(response);
+
+      final data = Map<String, dynamic>.from(response);
+
+      // Calculer guests_declined depuis les invitations avec status = 'decline'
+      final invitations = data['invitations'] as List? ?? [];
+      data['guests_declined'] = invitations
+          .where((i) => i['status'] == 'decline')
+          .length;
+
+      return data;
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {

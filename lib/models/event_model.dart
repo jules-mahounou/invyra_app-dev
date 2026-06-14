@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 class EventModel {
   final String id;
   final String userId;
@@ -79,8 +77,8 @@ class EventModel {
 
     final sent = _parseInt(map['invitations_sent']);
     final confirmed = _parseInt(map['guests_confirmed']);
-    // Estimation des absents basée sur les invitations envoyées qui ne sont pas confirmées
-    final estimatedDeclined = (sent > confirmed) ? (sent - confirmed) : 0;
+    // guests_declined calculé par EventService depuis les invitations avec status='decline'
+    final declined = _parseInt(map['guests_declined'] ?? 0);
 
     return EventModel(
       id: map['id'] as String? ?? '',
@@ -108,7 +106,7 @@ class EventModel {
       invitationsSent: sent,
       invitationsViewed: _parseInt(map['invitations_viewed']),
       guestsConfirmed: confirmed,
-      guestsDeclined: estimatedDeclined,
+      guestsDeclined: declined,
       customField1Label: metadata['customField1Label'] as String?,
       customField1Value: metadata['customField1Value'] as String?,
       customField2Label: metadata['customField2Label'] as String?,

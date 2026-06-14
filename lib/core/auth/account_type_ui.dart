@@ -8,11 +8,11 @@ abstract final class AccountTypeUi {
   static String badgeLabel(String accountType) {
     switch (accountType.toLowerCase()) {
       case 'essentiel':
-        return 'Standard';
+        return 'Essentiel';
       case 'flex':
         return 'Premium';
       default:
-        return 'Basique';
+        return 'Gratuit';
     }
   }
 

@@ -111,14 +111,41 @@ Deno.serve(async (req) => {
     const existing = existingByGuestId.get(guestId);
 
     if (existing) {
-      const qrCode = existing.qr_codes?.code ?? null;
-      results.push({
-        guest_id: guestId,
-        invitation_id: existing.id,
-        qr_code: qrCode,
-        invitation_url: `https://invyra-web.vercel.app/i/${existing.public_token}`,
-        public_token: existing.public_token,
-      });
+      // qr_codes est un tableau côté PostgREST — prendre le premier élément
+      const qrEntry = Array.isArray(existing.qr_codes)
+        ? existing.qr_codes[0]
+        : existing.qr_codes;
+      const qrCode = qrEntry?.code ?? null;
+
+      // Si l'invitation existe mais n'a pas encore de QR code, on le crée
+      if (!qrCode) {
+        const qrUpsert = await supabaseAdmin
+          .from('qr_codes')
+          .upsert({
+            code: randomHex(32),
+            invitation_id: existing.id,
+            is_used: false,
+          }, { onConflict: 'invitation_id' })
+          .select('code')
+          .single();
+
+        const finalQrCode = qrUpsert.data?.code ?? null;
+        results.push({
+          guest_id: guestId,
+          invitation_id: existing.id,
+          qr_code: finalQrCode,
+          invitation_url: `https://invyra-web.vercel.app/i/${existing.public_token}`,
+          public_token: existing.public_token,
+        });
+      } else {
+        results.push({
+          guest_id: guestId,
+          invitation_id: existing.id,
+          qr_code: qrCode,
+          invitation_url: `https://invyra-web.vercel.app/i/${existing.public_token}`,
+          public_token: existing.public_token,
+        });
+      }
       continue;
     }
 
@@ -138,13 +165,14 @@ Deno.serve(async (req) => {
       return jsonResponse(500, { error: invitationInsert.error?.message ?? 'Unable to create invitation' });
     }
 
+    // upsert pour éviter le doublon si appelé deux fois rapidement
     const qrInsert = await supabaseAdmin
       .from('qr_codes')
-      .insert({
+      .upsert({
         code: randomHex(32),
         invitation_id: invitationInsert.data.id,
         is_used: false,
-      })
+      }, { onConflict: 'invitation_id' })
       .select('code')
       .single();
 

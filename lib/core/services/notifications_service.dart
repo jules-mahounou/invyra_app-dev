@@ -56,14 +56,21 @@ class NotificationsService {
 
   Future<void> markAllAsRead() async {
     final userId = _userId;
-    if (userId == null) {
-      return;
-    }
-
+    if (userId == null) return;
     await _client
         .from('notifications')
         .update({'is_read': true})
         .eq('user_id', userId)
         .eq('is_read', false);
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    await _client.from('notifications').delete().eq('id', notificationId);
+  }
+
+  Future<void> deleteAllNotifications() async {
+    final userId = _userId;
+    if (userId == null) return;
+    await _client.from('notifications').delete().eq('user_id', userId);
   }
 }

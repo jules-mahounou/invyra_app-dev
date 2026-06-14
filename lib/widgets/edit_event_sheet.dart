@@ -18,10 +18,12 @@ import '../services/storage_service.dart';
 class EditEventSheet extends StatefulWidget {
   final EventModel event;
   final int invitationsSent;
+  final String accountType;
 
   const EditEventSheet({
     required this.event,
     this.invitationsSent = 0,
+    this.accountType = 'gratuit',
     super.key,
   });
 
@@ -146,7 +148,7 @@ class _EditEventSheetState extends State<EditEventSheet> {
             child: Step2Template(
               eventId: widget.event.id,
               eventType: widget.event.eventType,
-              accountType: 'gratuit', // sera mis à jour avec le vrai account type
+              accountType: widget.accountType,  // ← vrai account type
               onStepCompleted: (_) {
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(

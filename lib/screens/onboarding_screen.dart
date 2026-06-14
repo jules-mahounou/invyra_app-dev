@@ -80,20 +80,12 @@ class _FullScreenPainter extends CustomPainter {
 
     final waveY = size.height * waveRatio;
     final path = Path()
-      ..moveTo(0, waveY + 20)
-      ..cubicTo(
-        size.width * 0, waveY - 80,
-        size.width * 0.50, waveY - 50,
-        size.width * 0.55, waveY + 60,
-      )
-      ..cubicTo(
-        size.width * 0.70, waveY + 100,
-        size.width * 1, waveY + 80,
-        size.width, waveY,
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
+  ..moveTo(0, waveY)
+  ..lineTo(size.width * 0.70, waveY + 5)
+  
+  ..lineTo(size.width, size.height)
+  ..lineTo(0, size.height)
+  ..close();
 
     canvas.drawPath(path, Paint()..color = AppColors.blancCasse);
   }
