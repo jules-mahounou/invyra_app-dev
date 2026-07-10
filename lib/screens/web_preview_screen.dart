@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -67,6 +68,22 @@ class _WebPreviewScreenState extends State<WebPreviewScreen> {
     if (event.hasCustomField2) {
       params['cf2_label'] = event.customField2Label!;
       params['cf2_value'] = event.customField2Value!;
+    }
+    // Passer la couleur principale de la customization
+    final customization = event.customization;
+    if (customization.containsKey('primaryColor')) {
+      params['primary_color'] = customization['primaryColor'] as String;
+    }
+    // Passer toute la customization encodée en JSON pour l'aperçu
+    if (customization.isNotEmpty) {
+      try {
+        final customJson = Uri.encodeComponent(
+          customization.entries
+              .map((e) => '"${e.key}":${_encodeValue(e.value)}')
+              .join(',')
+        );
+        params['customization'] = '{$customJson}';
+      } catch (_) {}
     }
 
     final query = params.entries

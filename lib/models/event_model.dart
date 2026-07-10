@@ -38,6 +38,9 @@ class EventModel {
   final String? customField2Label;
   final String? customField2Value;
 
+  // Personnalisation du template (couleurs, champs spécifiques, images, etc.)
+  final Map<String, dynamic> customization;
+
   EventModel({
     required this.id,
     required this.userId,
@@ -69,6 +72,7 @@ class EventModel {
     this.customField1Value,
     this.customField2Label,
     this.customField2Value,
+    this.customization = const {},
   });
 
   factory EventModel.fromMap(Map<String, dynamic> map) {
@@ -111,6 +115,9 @@ class EventModel {
       customField1Value: metadata['customField1Value'] as String?,
       customField2Label: metadata['customField2Label'] as String?,
       customField2Value: metadata['customField2Value'] as String?,
+      customization: map['customization'] is Map
+          ? Map<String, dynamic>.from(map['customization'] as Map)
+          : const {},
     );
   }
 

@@ -12,6 +12,7 @@ import '../models/event_model.dart';
 import '../services/event_service.dart';
 import 'create_event/steps/step2_template.dart';
 import 'scan_screen.dart';
+import 'template_customization_screen.dart';
 import 'web_preview_screen.dart';
 import '../widgets/guest_manager_widget.dart';
 import '../widgets/edit_event_sheet.dart';
@@ -36,7 +37,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   EventModel? _event;
   bool _isLoading = true;
   String? _errorMessage;
-  String _accountType = 'gratuit'; // chargé dès l'init
+  String _accountType = 'gratuit';
+  Map<String, dynamic> _templateConfig = {}; // config du template actuel
 
   @override
   void initState() {
@@ -62,9 +64,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       
       setState(() {
         if (data['event_templates'] != null) {
-          _webTemplateKey = data['event_templates']['web_template_key'] as String?;
+          final tpl = data['event_templates'] as Map<String, dynamic>;
+          _webTemplateKey = tpl['web_template_key'] as String?;
+          // Charger la config du template pour la personnalisation
+          _templateConfig = tpl['config'] is Map
+              ? Map<String, dynamic>.from(tpl['config'] as Map)
+              : {};
         }
-        
         _event = EventModel.fromMap(data); 
         _isLoading = false;
       });
@@ -344,6 +350,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   hasTemplateChosen: _webTemplateKey != null && _webTemplateKey!.isNotEmpty,
                                   event: event,
                                   accountType: _accountType,
+                                  templateConfig: _templateConfig,
                                   onTemplateChosen: () async {
                                     await _loadEvent();
                                   },
@@ -739,6 +746,7 @@ class _InvitationPreviewCard extends StatelessWidget {
   final bool hasTemplateChosen;
   final EventModel event;
   final String accountType;
+  final Map<String, dynamic> templateConfig;
   final VoidCallback onTemplateChosen;
 
   const _InvitationPreviewCard({
@@ -747,6 +755,7 @@ class _InvitationPreviewCard extends StatelessWidget {
     required this.hasTemplateChosen,
     required this.event,
     required this.accountType,
+    required this.templateConfig,
     required this.onTemplateChosen,
   });
 
@@ -776,9 +785,9 @@ class _InvitationPreviewCard extends StatelessWidget {
               eventId: event.id,
               eventType: event.eventType,
               accountType: accountType,
-              onStepCompleted: (_) {
+              onStepCompleted: (templateId) async {
                 Navigator.of(context).pop();
-                onTemplateChosen();
+                onTemplateChosen(); // VoidCallback — pas d'await
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Template enregistré ✓'),
@@ -786,6 +795,20 @@ class _InvitationPreviewCard extends StatelessWidget {
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
+                // Ouvrir la personnalisation si la config a des champs
+                if (context.mounted && templateConfig.isNotEmpty) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TemplateCustomizationScreen(
+                        eventId: event.id,
+                        templateName: eventName,
+                        templateConfig: templateConfig,
+                        initialValues: event.customization,
+                        onSaved: onTemplateChosen,
+                      ),
+                    ),
+                  );
+                }
               },
               onBack: () => Navigator.of(context).pop(),
             ),
@@ -862,6 +885,33 @@ class _InvitationPreviewCard extends StatelessWidget {
               ),
             ],
           ),
+          // Bouton Personnaliser si template choisi et config disponible
+          if (hasTemplateChosen && templateConfig.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TemplateCustomizationScreen(
+                      eventId: event.id,
+                      templateName: eventName,
+                      templateConfig: templateConfig,
+                      initialValues: event.customization,
+                      onSaved: onTemplateChosen,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.tune_rounded, size: 16),
+                label: const Text('Personnaliser les couleurs et options'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.orAfricain,
+                  side: BorderSide(color: AppColors.orAfricain.withValues(alpha: 0.6)),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

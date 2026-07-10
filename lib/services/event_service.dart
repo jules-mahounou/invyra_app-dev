@@ -149,7 +149,7 @@ class EventService {
           .select('''
             *,
             guests(id, full_name, phone, email, import_source, created_at),
-            event_templates(id, name, tier, asset_path, preview_url, class_name, web_template_key),
+            event_templates(id, name, tier, asset_path, preview_url, class_name, web_template_key, config),
             invitations(status)
           ''')
           .eq('id', eventId)
@@ -157,8 +157,6 @@ class EventService {
           .single();
 
       final data = Map<String, dynamic>.from(response);
-
-      // Calculer guests_declined depuis les invitations avec status = 'decline'
       final invitations = data['invitations'] as List? ?? [];
       data['guests_declined'] = invitations
           .where((i) => i['status'] == 'decline')
@@ -168,9 +166,25 @@ class EventService {
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
-      throw Exception(
-        'Connexion impossible. Vérifiez votre connexion internet.',
-      );
+      throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
+    }
+  }
+
+  /// Met à jour la personnalisation d'un événement (couleurs, champs template)
+  Future<void> updateEventCustomization({
+    required String eventId,
+    required Map<String, dynamic> customization,
+  }) async {
+    try {
+      await _client
+          .from('events')
+          .update({'customization': customization})
+          .eq('id', eventId)
+          .eq('user_id', _client.auth.currentUser!.id);
+    } on PostgrestException catch (e) {
+      throw Exception('Erreur base de données : ${e.message}');
+    } catch (e) {
+      throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
     }
   }
 

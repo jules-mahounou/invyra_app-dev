@@ -165,27 +165,35 @@ Deno.serve(async (req) => {
       return jsonResponse(500, { error: invitationInsert.error?.message ?? 'Unable to create invitation' });
     }
 
-    // upsert pour éviter le doublon si appelé deux fois rapidement
-    const qrInsert = await supabaseAdmin
+    const newInvitationId = invitationInsert.data.id;
+    const newPublicToken = invitationInsert.data.public_token;
+
+    // Tenter d'insérer le QR code — ignorer si déjà existant (doublon sur invitation_id)
+    await supabaseAdmin
       .from('qr_codes')
-      .upsert({
+      .insert({
         code: randomHex(32),
-        invitation_id: invitationInsert.data.id,
+        invitation_id: newInvitationId,
         is_used: false,
-      }, { onConflict: 'invitation_id' })
+      })
       .select('code')
       .single();
 
-    if (qrInsert.error || !qrInsert.data) {
-      return jsonResponse(500, { error: qrInsert.error?.message ?? 'Unable to create QR code' });
-    }
+    // Relire le QR code réel en base (qu'il vienne d'être créé ou existait déjà)
+    const qrRead = await supabaseAdmin
+      .from('qr_codes')
+      .select('code')
+      .eq('invitation_id', newInvitationId)
+      .single();
+
+    const finalCode = qrRead.data?.code ?? null;
 
     results.push({
       guest_id: guestId,
-      invitation_id: invitationInsert.data.id,
-      qr_code: qrInsert.data.code,
-      invitation_url: `https://invyra-web.vercel.app/i/${invitationInsert.data.public_token}`,
-      public_token: invitationInsert.data.public_token,
+      invitation_id: newInvitationId,
+      qr_code: finalCode,
+      invitation_url: `https://invyra-web.vercel.app/i/${newPublicToken}`,
+      public_token: newPublicToken,
     });
   }
 
