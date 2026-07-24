@@ -49,9 +49,7 @@ class _WebPreviewScreenState extends State<WebPreviewScreen> {
     final event = widget.event;
     if (event == null) return base;
 
-    // Encoder les données de l'event comme query params
     final params = <String, String>{};
-
     params['name'] = event.name;
     params['place'] = event.place;
     if (event.description.isNotEmpty) params['description'] = event.description;
@@ -69,21 +67,9 @@ class _WebPreviewScreenState extends State<WebPreviewScreen> {
       params['cf2_label'] = event.customField2Label!;
       params['cf2_value'] = event.customField2Value!;
     }
-    // Passer la couleur principale de la customization
-    final customization = event.customization;
-    if (customization.containsKey('primaryColor')) {
-      params['primary_color'] = customization['primaryColor'] as String;
-    }
-    // Passer toute la customization encodée en JSON pour l'aperçu
-    if (customization.isNotEmpty) {
-      try {
-        final customJson = Uri.encodeComponent(
-          customization.entries
-              .map((e) => '"${e.key}":${_encodeValue(e.value)}')
-              .join(',')
-        );
-        params['customization'] = '{$customJson}';
-      } catch (_) {}
+    // Passer toute la customization encodée en JSON
+    if (event.customization.isNotEmpty) {
+      params['customization'] = jsonEncode(event.customization);
     }
 
     final query = params.entries

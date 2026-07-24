@@ -26,8 +26,6 @@ class EventDetailScreen extends StatefulWidget {
   State<EventDetailScreen> createState() => _EventDetailScreenState();
 }
 
-String? _webTemplateKey;
-
 class _EventDetailScreenState extends State<EventDetailScreen> {
   final _eventService = EventService();
   final _profileService = UserProfileService();
@@ -38,7 +36,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   String _accountType = 'gratuit';
-  Map<String, dynamic> _templateConfig = {}; // config du template actuel
+  String? _webTemplateKey;           // déplacé dans le state
+  Map<String, dynamic> _templateConfig = {};
 
   @override
   void initState() {
@@ -63,10 +62,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final data = await _eventService.getEventById(widget.eventId);
       
       setState(() {
+        // Réinitialiser avant chaque chargement
+        _webTemplateKey = null;
+        _templateConfig = {};
         if (data['event_templates'] != null) {
           final tpl = data['event_templates'] as Map<String, dynamic>;
           _webTemplateKey = tpl['web_template_key'] as String?;
-          // Charger la config du template pour la personnalisation
           _templateConfig = tpl['config'] is Map
               ? Map<String, dynamic>.from(tpl['config'] as Map)
               : {};

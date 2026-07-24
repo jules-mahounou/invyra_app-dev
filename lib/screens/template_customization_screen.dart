@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
@@ -393,49 +395,179 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
     final key = field['key'] as String;
     final label = field['label'] as String? ?? key;
     final max = (field['max'] as int?) ?? 5;
+    // Images actuelles ou images démo par défaut (noms de fichiers du registre)
+    final demoImages = (field['demoImages'] as List?)?.cast<String>() ?? <String>[];
     final images = (_values[key] as List?)?.cast<String>() ?? <String>[];
+    final showKey = '${key}_visible';
+    final isVisible = _values[showKey] as bool? ?? true;
+
+    // Construire la liste à afficher : images uploadées ou placeholders démo
+    final _ = demoImages; // demoImages disponibles pour référence future
 
     return _FieldCard(
       label: label,
-      child: Column(
+      trailing: Switch(
+        value: isVisible,
+        activeThumbColor: AppColors.violetRoyal,
+        activeTrackColor: AppColors.violetRoyal.withValues(alpha: 0.3),
+        onChanged: (v) => setState(() => _values[showKey] = v),
+      ),
+      child: isVisible ? Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Les images seront affichées dans le template.',
+            'Appuyez sur une photo pour la remplacer. Max $max photos.',
             style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.noirDoux.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: AppSpacing.sm),
-          for (int i = 0; i < images.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      images[i].length > 40 ? '...${images[i].substring(images[i].length - 40)}' : images[i],
-                      style: AppTypography.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
-                      overflow: TextOverflow.ellipsis,
+          // Grille galerie 2×2 style moodboard
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: images.length < max ? images.length + 1 : images.length,
+            itemBuilder: (_, i) {
+              // Dernière case = bouton ajouter
+              if (i == images.length && images.length < max) {
+                return GestureDetector(
+                  onTap: () async {
+                    final picker = ImagePicker();
+                    final picked = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      maxWidth: 1200,
+                      imageQuality: 85,
+                    );
+                    if (picked == null || !mounted) return;
+                    setState(() => _isSaving = true);
+                    try {
+                      final bytes = await picked.readAsBytes();
+                      final userId = Supabase.instance.client.auth.currentUser!.id;
+                      final path = '$userId/events/${widget.eventId}/template/${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
+                      await Supabase.instance.client.storage
+                          .from('event-logos')
+                          .uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
+                      final url = Supabase.instance.client.storage
+                          .from('event-logos')
+                          .getPublicUrl(path);
+                      if (mounted) {
+                        setState(() {
+                          final newList = List<String>.from(images)..add(url);
+                          _values[key] = newList;
+                          _isSaving = false;
+                        });
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        setState(() => _isSaving = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.beigeCremeAlt,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.violetRoyal.withValues(alpha: 0.3), style: BorderStyle.solid),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.add_photo_alternate_rounded, color: AppColors.violetRoyal, size: 28),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Ajouter',
+                          style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.violetRoyal, fontSize: 11),
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => setState(() {
-                      final newList = List<String>.from(images)..removeAt(i);
-                      _values[key] = newList;
-                    }),
-                    icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.error, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                );
+              }
+              // Photo existante — tap pour remplacer, long press pour supprimer
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picker = ImagePicker();
+                      final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
+                      if (picked == null || !mounted) return;
+                      setState(() => _isSaving = true);
+                      try {
+                        final bytes = await picked.readAsBytes();
+                        final userId = Supabase.instance.client.auth.currentUser!.id;
+                        final path = '$userId/events/${widget.eventId}/template/${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
+                        await Supabase.instance.client.storage.from('event-logos').uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
+                        final url = Supabase.instance.client.storage.from('event-logos').getPublicUrl(path);
+                        if (mounted) {
+                          setState(() {
+                            final newList = List<String>.from(images);
+                            newList[i] = url;
+                            _values[key] = newList;
+                            _isSaving = false;
+                          });
+                        }
+                      } catch (_) { if (mounted) setState(() => _isSaving = false); }
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.08)),
+                        image: DecorationImage(
+                          image: NetworkImage(images[i]),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Overlay "Modifier"
+                  Positioned(
+                    bottom: 4, left: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('Modifier', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  // Bouton supprimer
+                  Positioned(
+                    top: -6, right: -6,
+                    child: GestureDetector(
+                      onTap: () {
+                        final newList = List<String>.from(images)..removeAt(i);
+                        setState(() => _values[key] = newList);
+                      },
+                      child: Container(
+                        width: 20, height: 20,
+                        decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 12),
+                      ),
+                    ),
                   ),
                 ],
+              );
+            },
+          ),
+          if (images.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                'Aucune photo ajoutée — les images de démo seront utilisées.',
+                style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.noirDoux.withValues(alpha: 0.4), fontStyle: FontStyle.italic),
               ),
             ),
-          if (images.length < max)
-            Text(
-              '${images.length}/$max photos — Les photos s\'ajoutent lors de la génération des billets.',
-              style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.violetRoyal.withValues(alpha: 0.7)),
-            ),
         ],
-      ),
+      ) : const SizedBox.shrink(),
     );
   }
 
