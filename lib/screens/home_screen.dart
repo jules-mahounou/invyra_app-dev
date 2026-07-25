@@ -7,7 +7,6 @@ import '../core/models/home_dashboard_data.dart';
 import '../core/models/recent_event.dart';
 import '../core/services/home_dashboard_service.dart';
 import '../core/theme/app_colors.dart';
-import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
@@ -119,14 +118,15 @@ class HomeTabContentState extends State<HomeTabContent> {
                           activeEvents: data.activeEvents,
                           invitesDispatched: data.invitesDispatched,
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                        _PlansButton(),
                         const SizedBox(height: AppSpacing.lg),
                         // ── Événements récents ──
                         _EventListSection(
                           events: data.recentEvents,
                           onSeeAll: widget.onSeeAllEvents,
                         ),
+                        const SizedBox(height: AppSpacing.lg),
+                        // ── Bouton abonnements ──
+                        _PlansButton(),
                       ],
                     ),
                   ),
@@ -428,102 +428,81 @@ class _StatsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stats = [
-      _StatData(
-        icon: Icons.event_available_rounded,
-        label: 'Événements actifs',
-        value: activeEvents.toString(),
-        color: AppColors.violetRoyal,
-      ),
-      _StatData(
-        icon: Icons.send_rounded,
-        label: 'Invitations envoyées',
-        value: invitesDispatched.toString(),
-        color: AppColors.info,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < AppConstants.maxContentWidth / 2;
-
-        if (compact) {
-          return Column(
-            children: [
-              for (final stat in stats) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: _StatCard(data: stat),
-                ),
-                if (stat != stats.last) const SizedBox(height: AppSpacing.md),
-              ],
-            ],
-          );
-        }
-
-        final cardWidth =
-            (constraints.maxWidth - AppSpacing.lg * (stats.length - 1)) /
-            stats.length;
-        return Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.md,
-          children: [
-            for (final stat in stats)
-              SizedBox(
-                width: cardWidth,
-                child: _StatCard(data: stat),
-              ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.event_available_rounded,
+            label: 'Événements actifs',
+            value: activeEvents.toString(),
+            color: AppColors.violetRoyal,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.send_rounded,
+            label: 'Invitations envoyées',
+            value: invitesDispatched.toString(),
+            color: AppColors.info,
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _StatCard extends StatelessWidget {
-  final _StatData data;
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
 
-  const _StatCard({required this.data});
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppDecorations.cardDecoration.copyWith(
-        border: Border.all(color: data.color.withValues(alpha: 0.12)),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: data.color,
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(
-              data.icon,
-              color: AppColors.blancCasse,
-              size: AppSpacing.lg,
-            ),
+            child: Icon(icon, color: color, size: 18),
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  data.value,
-                  style: AppTypography.textTheme.displaySmall?.copyWith(
-                    color: data.color,
-                    fontWeight: FontWeight.w700,
+                  value,
+                  style: AppTypography.textTheme.titleMedium?.copyWith(
+                    color: AppColors.noirDoux,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
                 Text(
-                  data.label,
+                  label,
+                  maxLines: 2,
                   style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.noirDoux,
-                    fontWeight: FontWeight.w600,
+                    color: AppColors.noirDoux.withValues(alpha: 0.55),
+                    fontSize: 11,
                   ),
                 ),
               ],
@@ -581,48 +560,42 @@ class _EventListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppDecorations.cardDecoration.copyWith(
-        color: AppColors.blancCasse,
-        border: Border.all(
-          color: AppColors.violetRoyal.withValues(alpha: 0.10),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // En-tête de section — titre + lien "Voir plus"
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Événements récents',
+                style: AppTypography.textTheme.titleMedium?.copyWith(
+                  color: AppColors.noirDoux,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onSeeAll,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.violetRoyal,
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Voir plus'),
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Événements récents',
-                  style: AppTypography.textTheme.titleMedium?.copyWith(
-                    color: AppColors.noirDoux,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: onSeeAll,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.violetRoyal,
-                ),
-                child: const Text('Voir plus'),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (events.isEmpty)
-            const _EmptyEventsPlaceholder()
-          else
-            for (final event in events) ...[
-              _EventListTile(event: event),
-              if (event != events.last) const SizedBox(height: AppSpacing.sm),
-            ],
-        ],
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        if (events.isEmpty)
+          const _EmptyEventsPlaceholder()
+        else
+          for (final event in events) ...[
+            _EventListTile(event: event),
+            if (event != events.last) const SizedBox(height: AppSpacing.xs),
+          ],
+      ],
     );
   }
 }
@@ -671,17 +644,11 @@ class _EventListTile extends StatelessWidget {
         EventDetailScreen(eventId: event.id),
       ),
       borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: AppDecorations.cardDecoration.copyWith(
-          color: AppColors.beigeCremeAlt,
-          border: Border.all(
-            color: status.backgroundColor.withValues(alpha: 0.14),
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: [
-            EventThumbnail(logoUrl: event.logoUrl, size: AppSpacing.xxl),
+            EventThumbnail(logoUrl: event.logoUrl, size: 48),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -693,31 +660,40 @@ class _EventListTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w700,
+                      color: AppColors.noirDoux,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    formatEventDateShort(event.eventDate),
-                    style: AppTypography.textTheme.bodySmall?.copyWith(
-                      color: AppColors.noirDoux.withValues(alpha: 0.70),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
                       Icon(
-                        Icons.place_outlined,
-                        color: AppColors.violetRoyal,
-                        size: AppSpacing.md,
+                        Icons.calendar_today_outlined,
+                        color: AppColors.noirDoux.withValues(alpha: 0.45),
+                        size: 11,
                       ),
-                      const SizedBox(width: AppSpacing.xs),
+                      const SizedBox(width: 4),
+                      Text(
+                        formatEventDateShort(event.eventDate),
+                        style: AppTypography.textTheme.bodySmall?.copyWith(
+                          color: AppColors.noirDoux.withValues(alpha: 0.55),
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Icon(
+                        Icons.place_outlined,
+                        color: AppColors.noirDoux.withValues(alpha: 0.45),
+                        size: 11,
+                      ),
+                      const SizedBox(width: 2),
                       Expanded(
                         child: Text(
                           event.place,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.textTheme.bodySmall?.copyWith(
-                            color: AppColors.noirDoux.withValues(alpha: 0.70),
+                            color: AppColors.noirDoux.withValues(alpha: 0.55),
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -727,53 +703,32 @@ class _EventListTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: status.backgroundColor,
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                  ),
-                  child: Text(
-                    status.label,
-                    style: AppTypography.textTheme.labelSmall?.copyWith(
-                      color: status.foregroundColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+              decoration: BoxDecoration(
+                color: status.backgroundColor,
+                borderRadius: BorderRadius.circular(AppRadius.full),
+              ),
+              child: Text(
+                status.label,
+                style: AppTypography.textTheme.labelSmall?.copyWith(
+                  color: status.foregroundColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.noirDoux.withValues(alpha: 0.35),
-                  size: AppSpacing.lg,
-                ),
-              ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.noirDoux.withValues(alpha: 0.25),
+              size: 18,
             ),
           ],
         ),
       ),
     );
   }
-}
-
-class _StatData {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatData({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
 }
 
 enum _EventStatus {
