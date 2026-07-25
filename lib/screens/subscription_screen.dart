@@ -594,9 +594,7 @@ class _GradientButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: AppColors.gradientPrincipal,
-          borderRadius: BorderRadius.circular(AppRadius.full),
+        decoration: BoxDecoration(color: AppColors.violetRoyal, borderRadius: BorderRadius.circular(AppRadius.full),
         ),
         child: ElevatedButton(
           onPressed: onPressed,

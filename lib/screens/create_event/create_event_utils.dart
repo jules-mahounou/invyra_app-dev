@@ -167,8 +167,8 @@ class _StepCircle extends StatelessWidget {
       height: AppSpacing.xxl,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: active ? AppColors.gradientPrincipal : null,
-        color: active ? null : AppColors.beigeCremeBase,
+        gradient: active ? null : null,
+        color: active ? AppColors.violetRoyal : AppColors.beigeCremeBase,
         shape: BoxShape.circle,
         boxShadow: active
             ? [
@@ -221,9 +221,7 @@ class CreateEventGradientButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: AppColors.gradientPrincipal,
-          borderRadius: BorderRadius.circular(AppRadius.full),
+        decoration: BoxDecoration(color: AppColors.violetRoyal, borderRadius: BorderRadius.circular(AppRadius.full),
         ),
         child: ElevatedButton.icon(
           onPressed: onPressed,

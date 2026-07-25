@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
@@ -666,8 +665,7 @@ class _GradientActionButton extends StatelessWidget {
       width: double.infinity,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: onPressed == null ? null : AppColors.gradientPrincipal,
-          color: onPressed == null ? AppColors.noirDoux.withValues(alpha: 0.18) : null,
+          color: onPressed == null ? AppColors.noirDoux.withValues(alpha: 0.18) : AppColors.violetRoyal,
           borderRadius: BorderRadius.circular(AppRadius.full),
         ),
         child: ElevatedButton.icon(

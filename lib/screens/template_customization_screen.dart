@@ -798,7 +798,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
             SizedBox(
               width: double.infinity,
               child: DecoratedBox(
-                decoration: BoxDecoration(gradient: AppColors.gradientPrincipal, borderRadius: BorderRadius.circular(AppRadius.full)),
+                decoration: BoxDecoration(color: AppColors.violetRoyal, borderRadius: BorderRadius.circular(AppRadius.full)),
                 child: ElevatedButton.icon(
                   onPressed: _isSaving ? null : _save,
                   icon: const Icon(Icons.check_rounded),

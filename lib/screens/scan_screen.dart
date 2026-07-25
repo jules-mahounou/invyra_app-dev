@@ -321,7 +321,7 @@ class _ScanFrame extends StatelessWidget {
               child: Container(
                 height: AppSpacing.sm,
                 decoration: BoxDecoration(
-                  gradient: AppColors.gradientPrincipal,
+                  color: AppColors.violetRoyal,
                   borderRadius: BorderRadius.circular(AppRadius.full),
                   boxShadow: [
                     BoxShadow(

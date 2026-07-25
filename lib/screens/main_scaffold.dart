@@ -3,12 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../core/auth/account_type_ui.dart';
 import '../core/auth/auth_gate.dart';
-import '../core/constants/app_assets.dart';
 import '../core/services/notifications_service.dart';
 import '../core/services/user_profile_service.dart';
-import '../core/constants/app_constants.dart';
 import '../core/constants/app_nav_icons.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
@@ -111,58 +108,32 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final plan = _ShellAccountPlan.from(_accountType);
-
     return Scaffold(
       backgroundColor: AppColors.blancCasse,
       body: SafeArea(
-        child: Column(
+        child: IndexedStack(
+          index: _currentIndex,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                0,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-                  child: _PersistentHeader(
-                    plan: plan,
-                    unreadCount: _unreadCount,
-                    onNotificationsTap: () async {
-                      await pushProtectedRoute(context, const NotificationsScreen());
-                      if (mounted) {
-                        await _loadUnreadCount();
-                      }
-                    },
-                  ),
-                ),
-              ),
+            HomeTabContent(
+              key: _homeKey,
+              onSeeAllEvents: _openEventsList,
+              unreadCount: _unreadCount,
+              onNotificationsTap: () async {
+                await pushProtectedRoute(context, const NotificationsScreen());
+                if (mounted) await _loadUnreadCount();
+              },
             ),
-            Expanded(
-              child: IndexedStack(
-                index: _currentIndex,
-                children: [
-                  HomeTabContent(
-                    key: _homeKey,
-                    onSeeAllEvents: _openEventsList,
+            _createEventOpen
+                ? CreateEventTabContent(
+                    accountType: _accountType,
+                    onBack: _closeCreateEvent,
+                  )
+                : EventsScreen(
+                    key: _eventsKey,
+                    onCreate: _openCreateEvent,
                   ),
-                  _createEventOpen
-                      ? CreateEventTabContent(
-                          accountType: _accountType,
-                          onBack: _closeCreateEvent,
-                        )
-                      : EventsScreen(
-                          key: _eventsKey,
-                          onCreate: _openCreateEvent,
-                        ),
-                  TemplatesScreen(accountType: _accountType),
-                  ProfileScreen(accountType: _accountType),
-                ],
-              ),
-            ),
+            TemplatesScreen(accountType: _accountType),
+            ProfileScreen(accountType: _accountType),
           ],
         ),
       ),
@@ -327,7 +298,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                                   children: [
                                     Container(
                                       width: 44, height: 44,
-                                      decoration: BoxDecoration(gradient: AppColors.gradientPrincipal, borderRadius: BorderRadius.circular(AppRadius.md)),
+                                      decoration: BoxDecoration(color: AppColors.violetRoyal, borderRadius: BorderRadius.circular(AppRadius.md)),
                                       child: const Icon(Icons.event_rounded, color: AppColors.blancCasse, size: 22),
                                     ),
                                     const SizedBox(width: AppSpacing.md),
@@ -374,122 +345,6 @@ class _MainScaffoldState extends State<MainScaffold> {
     } catch (_) {
       return '';
     }
-  }
-}
-
-class _PersistentHeader extends StatelessWidget {
-  final _ShellAccountPlan plan;
-  final int unreadCount;
-  final VoidCallback onNotificationsTap;
-
-  const _PersistentHeader({
-    required this.plan,
-    required this.unreadCount,
-    required this.onNotificationsTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Image.asset(AppAssets.logoFull, height: AppSpacing.xxl, fit: BoxFit.contain),
-        const Spacer(),
-        _AccountStatusPill(plan: plan),
-        const SizedBox(width: AppSpacing.sm),
-        _NotificationIconButton(unreadCount: unreadCount, onTap: onNotificationsTap),
-      ],
-    );
-  }
-}
-
-class _NotificationIconButton extends StatelessWidget {
-  final int unreadCount;
-  final VoidCallback onTap;
-
-  const _NotificationIconButton({
-    required this.unreadCount,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final badgeLabel = unreadCount > 9 ? '9+' : '$unreadCount';
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          onPressed: onTap,
-          icon: const Icon(Icons.notifications_none_rounded),
-          color: AppColors.violetRoyal,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.blancCasse,
-            side: BorderSide(color: AppColors.violetRoyal.withValues(alpha: 0.12)),
-          ),
-        ),
-        if (unreadCount > 0)
-          Positioned(
-            right: AppSpacing.xs,
-            top: AppSpacing.xs,
-            child: Container(
-              constraints: const BoxConstraints(minWidth: AppSpacing.lg, minHeight: AppSpacing.lg),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-              decoration: const BoxDecoration(
-                color: AppColors.error,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                badgeLabel,
-                style: AppTypography.textTheme.labelSmall?.copyWith(
-                  color: AppColors.blancCasse,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _AccountStatusPill extends StatelessWidget {
-  final _ShellAccountPlan plan;
-
-  const _AccountStatusPill({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.beigeCremeBase,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        border: Border.all(color: plan.color),
-        boxShadow: [
-          BoxShadow(
-            color: plan.color.withValues(alpha: 0.14),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(plan.icon, color: AppColors.noirDoux, size: AppSpacing.lg),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            plan.label,
-            style: AppTypography.textTheme.labelLarge?.copyWith(
-              color: AppColors.noirDoux,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -650,7 +505,7 @@ class _ScannerNavItem extends StatelessWidget {
                 width: AppSpacing.xxl + AppSpacing.sm,
                 height: AppSpacing.xxl + AppSpacing.sm,
                 decoration: BoxDecoration(
-                  gradient: AppColors.gradientPrincipal,
+                  color: AppColors.violetRoyal,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -673,26 +528,6 @@ class _ScannerNavItem extends StatelessWidget {
     );
   }
 }
-class _ShellAccountPlan {
-  final String label;
-  final Color color;
-  final IconData icon;
-
-  const _ShellAccountPlan({
-    required this.label,
-    required this.color,
-    required this.icon,
-  });
-
-  factory _ShellAccountPlan.from(String value) {
-    return _ShellAccountPlan(
-      label: AccountTypeUi.badgeLabel(value),
-      color: AccountTypeUi.badgeColor(value),
-      icon: AccountTypeUi.badgeIcon(value),
-    );
-  }
-}
-
 class _StatusDot extends StatelessWidget {
   final String status;
   const _StatusDot({required this.status});

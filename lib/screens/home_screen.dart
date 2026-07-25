@@ -17,8 +17,15 @@ import 'event_detail_screen.dart';
 
 class HomeTabContent extends StatefulWidget {
   final VoidCallback? onSeeAllEvents;
+  final int unreadCount;
+  final VoidCallback? onNotificationsTap;
 
-  const HomeTabContent({super.key, this.onSeeAllEvents});
+  const HomeTabContent({
+    super.key,
+    this.onSeeAllEvents,
+    this.unreadCount = 0,
+    this.onNotificationsTap,
+  });
 
   @override
   State<HomeTabContent> createState() => HomeTabContentState();
@@ -82,37 +89,46 @@ class HomeTabContentState extends State<HomeTabContent> {
       color: AppColors.blancCasse,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AppConstants.maxContentWidth,
-          ),
+          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
           child: RefreshIndicator(
             color: AppColors.violetRoyal,
             onRefresh: _loadDashboard,
             child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _WelcomeCard(userName: data.firstName),
-                  const SizedBox(height: AppSpacing.lg),
-                  _StatsSection(
-                    activeEvents: data.activeEvents,
-                    invitesDispatched: data.invitesDispatched,
+                  // ── Header propre à la page ──
+                  _HomeHeader(
+                    userName: data.firstName,
+                    avatarUrl: data.avatarUrl,
+                    unreadCount: widget.unreadCount,
+                    onNotificationsTap: widget.onNotificationsTap,
+                    onSeeAllEvents: widget.onSeeAllEvents,
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  _PlansButton(),
-                  const SizedBox(height: AppSpacing.lg),
-                  _EventListSection(
-                    events: data.recentEvents,
-                    onSeeAll: widget.onSeeAllEvents,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Carte Créer un événement ──
+                        _CreateEventCard(onTap: widget.onSeeAllEvents),
+                        const SizedBox(height: AppSpacing.lg),
+                        // ── Stats ──
+                        _StatsSection(
+                          activeEvents: data.activeEvents,
+                          invitesDispatched: data.invitesDispatched,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _PlansButton(),
+                        const SizedBox(height: AppSpacing.lg),
+                        // ── Événements récents ──
+                        _EventListSection(
+                          events: data.recentEvents,
+                          onSeeAll: widget.onSeeAllEvents,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -126,6 +142,189 @@ class HomeTabContentState extends State<HomeTabContent> {
 
 class HomeScreen extends HomeTabContent {
   const HomeScreen({super.key});
+}
+
+// ─── Header propre à la page Home ────────────────────────────────────────────
+class _HomeHeader extends StatelessWidget {
+  final String userName;
+  final String? avatarUrl;
+  final int unreadCount;
+  final VoidCallback? onNotificationsTap;
+  final VoidCallback? onSeeAllEvents;
+
+  const _HomeHeader({
+    required this.userName,
+    required this.avatarUrl,
+    required this.unreadCount,
+    this.onNotificationsTap,
+    this.onSeeAllEvents,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final badgeLabel = unreadCount > 9 ? '9+' : '$unreadCount';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
+      child: Row(
+        children: [
+          // Avatar
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.beigeCremeAlt,
+              border: Border.all(color: AppColors.violetRoyal.withValues(alpha: 0.2), width: 2),
+            ),
+            child: ClipOval(
+              child: avatarUrl != null && avatarUrl!.isNotEmpty
+                  ? Image.network(avatarUrl!, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: AppColors.violetRoyal, size: 24))
+                  : const Icon(Icons.person_rounded, color: AppColors.violetRoyal, size: 24),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          // Nom
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Bonjour,',
+                  style: AppTypography.textTheme.bodySmall?.copyWith(
+                    color: AppColors.noirDoux.withValues(alpha: 0.6),
+                  ),
+                ),
+                Text(
+                  userName.isNotEmpty ? userName.split(' ').first : 'Utilisateur',
+                  style: AppTypography.textTheme.displaySmall?.copyWith(
+                    color: AppColors.noirDoux,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Cloche notifications
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                onPressed: onNotificationsTap,
+                icon: const Icon(Icons.notifications_rounded),
+                color: AppColors.violetRoyal,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.violetRoyal.withValues(alpha: 0.08),
+                  shape: const CircleBorder(),
+                ),
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 4, top: 4,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: const BoxDecoration(color: AppColors.orAfricain, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: Text(badgeLabel,
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Carte Créer un événement ─────────────────────────────────────────────────
+class _CreateEventCard extends StatelessWidget {
+  final VoidCallback? onTap;
+  const _CreateEventCard({this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        height: 180,
+        decoration: BoxDecoration(
+          color: AppColors.violetRoyal,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Texte + bouton à gauche
+            Positioned(
+              left: AppSpacing.lg,
+              bottom: AppSpacing.lg,
+              right: 160,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Créer un\névénement',
+                    style: AppTypography.textTheme.displayMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                    ),
+                    child: Text(
+                      'Commencer',
+                      style: AppTypography.textTheme.bodySmall?.copyWith(
+                        color: AppColors.violetRoyal,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Badge "Nouveau"
+            Positioned(
+              top: AppSpacing.md,
+              right: AppSpacing.md,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                decoration: BoxDecoration(
+                  color: AppColors.orAfricain,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Text(
+                  'Nouveau',
+                  style: AppTypography.textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            // Illustration à droite
+            Positioned(
+              right: -8,
+              bottom: 0,
+              child: Image.asset(
+                'assets/images/illustrations/invyra_event_asset.png',
+                height: 170,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _HomeLoadingView extends StatelessWidget {
@@ -213,55 +412,6 @@ class _HomeErrorView extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _WelcomeCard extends StatelessWidget {
-  final String userName;
-
-  const _WelcomeCard({required this.userName});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppDecorations.cardDecoration.copyWith(
-        border: Border.all(
-          color: AppColors.violetRoyal.withValues(alpha: 0.10),
-        ),
-      ),
-      child: Row(
-        children: [
-          Image.asset(
-            AppAssets.mascotWelcome,
-            height: AppSpacing.xxl + AppSpacing.lg,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Bienvenue, $userName',
-                  style: AppTypography.textTheme.displaySmall?.copyWith(
-                    color: AppColors.violetRoyal,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Vos invitations, invités et événements sont prêts à être pilotés avec élégance.',
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.noirDoux,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

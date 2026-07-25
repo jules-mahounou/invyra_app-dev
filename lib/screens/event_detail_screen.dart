@@ -1073,7 +1073,11 @@ LinearGradient _eventGradient(String type) {
         end: Alignment.bottomRight,
       );
     default:
-      return AppColors.gradientPrincipal;
+      return const LinearGradient(
+        colors: [AppColors.violetRoyal, AppColors.violetRoyalAlt],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
   }
 }
 
@@ -1093,9 +1097,7 @@ class _GradientActionButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: AppColors.gradientPrincipal,
-          borderRadius: BorderRadius.circular(AppRadius.full),
+        decoration: BoxDecoration(color: AppColors.violetRoyal, borderRadius: BorderRadius.circular(AppRadius.full),
         ),
         child: ElevatedButton.icon(
           onPressed: onPressed,

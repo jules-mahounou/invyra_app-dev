@@ -29,9 +29,7 @@ class AppDecorations {
         ],
       );
 
-  static BoxDecoration get buttonGradient => BoxDecoration(
-        gradient: AppColors.gradientPrincipal,
-        borderRadius: BorderRadius.circular(AppRadius.full),
+  static BoxDecoration get buttonGradient => BoxDecoration(color: AppColors.violetRoyal, borderRadius: BorderRadius.circular(AppRadius.full),
         boxShadow: [
           BoxShadow(
             color: AppColors.violetRoyal.withValues(alpha: 0.25),

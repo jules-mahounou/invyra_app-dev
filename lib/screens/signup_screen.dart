@@ -284,7 +284,7 @@ class _SignupScreenState extends State<SignupScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           decoration: BoxDecoration(
-            gradient: AppColors.gradientPrincipal,
+            color: AppColors.violetRoyal,
             borderRadius: BorderRadius.circular(12),
           ),
           alignment: Alignment.center,
