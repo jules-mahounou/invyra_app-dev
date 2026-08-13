@@ -260,7 +260,7 @@ class _CreateEventCard extends StatelessWidget {
             Positioned(
               left: AppSpacing.lg,
               bottom: AppSpacing.lg,
-              right: 160,
+              right: 150,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -291,32 +291,13 @@ class _CreateEventCard extends StatelessWidget {
                 ],
               ),
             ),
-            // Badge "Nouveau"
+            // Illustration débordante à droite
             Positioned(
-              top: AppSpacing.md,
-              right: AppSpacing.md,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                decoration: BoxDecoration(
-                  color: AppColors.orAfricain,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Text(
-                  'Nouveau',
-                  style: AppTypography.textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            // Illustration à droite
-            Positioned(
-              right: -8,
+              right: -20,
               bottom: 0,
               child: Image.asset(
                 'assets/images/illustrations/invyra_event_asset.png',
-                height: 170,
+                height: 175,
                 fit: BoxFit.contain,
               ),
             ),
