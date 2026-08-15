@@ -209,7 +209,7 @@ class _HomeHeader extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               IconButton(
-                onPressed: onNotificationsTap,
+                onPressed: null,
                 icon: const Icon(Icons.notifications_rounded),
                 color: AppColors.violetRoyal,
                 style: IconButton.styleFrom(
@@ -293,7 +293,7 @@ class _CreateEventCard extends StatelessWidget {
             ),
             // Illustration débordante à droite
             Positioned(
-              right: -20,
+              right: -45,
               bottom: 0,
               child: Image.asset(
                 'assets/images/illustrations/invyra_event_asset.png',
