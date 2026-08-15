@@ -490,7 +490,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
                   ),
                 );
               }
-              // Photo existante — tap pour remplacer, long press pour supprimer
+              // Photo existante — tap pour remplacer
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -516,13 +516,38 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
                         }
                       } catch (_) { if (mounted) setState(() => _isSaving = false); }
                     },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.08)),
-                        image: DecorationImage(
-                          image: NetworkImage(images[i]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.08)),
+                          color: AppColors.beigeCremeAlt,
+                        ),
+                        child: Image.network(
+                          images[i],
                           fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          loadingBuilder: (_, child, progress) {
+                            if (progress == null) return child;
+                            return Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.violetRoyal,
+                                  value: progress.expectedTotalBytes != null
+                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.broken_image_rounded, color: AppColors.noirDoux, size: 24),
+                          ),
                         ),
                       ),
                     ),
