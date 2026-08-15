@@ -403,17 +403,10 @@ class _SubscriptionSummary extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
           ] else ...[
-            Text(
-              '✨ Événements illimités',
-              style: AppTypography.textTheme.bodySmall?.copyWith(
-                color: AppColors.orAfricain,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
             const SizedBox(height: AppSpacing.md),
           ],
           _GradientButton(
-            label: plan.key == 'gratuit' ? '⚡ Voir les offres' : '⚡ Gérer mon abonnement',
+            label: plan.key == 'gratuit' ? 'Voir les offres' : 'Gérer mon abonnement',
             onPressed: () => Navigator.of(context).pushNamed('/subscription'),
           ),
         ],
