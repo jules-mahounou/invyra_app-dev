@@ -219,16 +219,6 @@ class _SearchField extends StatelessWidget {
         hintStyle: AppTypography.textTheme.bodyMedium?.copyWith(
           color: AppColors.noirDoux.withValues(alpha: 0.42),
         ),
-        fillColor: AppColors.blancCasse,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.full),
-          borderSide: BorderSide(color: AppColors.noirDoux.withValues(alpha: 0.10)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.full),
-          borderSide: const BorderSide(color: AppColors.violetRoyal, width: 2),
-        ),
       ),
     );
   }

@@ -341,15 +341,6 @@ class _PasswordField extends StatelessWidget {
           icon: Icon(obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined),
           color: AppColors.noirDoux.withValues(alpha: 0.58),
         ),
-        fillColor: AppColors.blancCasse,
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: BorderSide(color: AppColors.violetRoyal.withValues(alpha: 0.14)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: const BorderSide(color: AppColors.violetRoyal, width: 2),
-        ),
       ),
     );
   }

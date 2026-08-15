@@ -767,17 +767,6 @@ class _SheetTextField extends StatelessWidget {
         helperText: helperText,
         prefixIcon: Icon(icon, color: AppColors.violetRoyal),
         prefixText: prefixText,
-        fillColor: AppColors.beigeCremeAlt,
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: BorderSide(
-            color: AppColors.orAfricain.withValues(alpha: 0.24),
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: const BorderSide(color: AppColors.violetRoyal, width: 2),
-        ),
       ),
     );
   }

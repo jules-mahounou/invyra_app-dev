@@ -639,16 +639,6 @@ class _PickerField extends StatelessWidget {
 InputDecoration _sheetDecoration(IconData icon) {
   return InputDecoration(
     prefixIcon: Icon(icon, color: AppColors.violetRoyal),
-    fillColor: AppColors.beigeCremeAlt,
-    filled: true,
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      borderSide: BorderSide(color: AppColors.orAfricain.withValues(alpha: 0.24)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      borderSide: const BorderSide(color: AppColors.violetRoyal, width: 2),
-    ),
   );
 }
 
