@@ -202,12 +202,11 @@ class EventsScreenState extends State<EventsScreen> {
                 Positioned(
                   right: AppSpacing.lg,
                   bottom: AppSpacing.lg,
-                  child: FloatingActionButton.extended(
+                  child: FloatingActionButton(
                     onPressed: widget.onCreate,
                     backgroundColor: AppColors.violetRoyal,
                     foregroundColor: AppColors.blancCasse,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Créer'),
+                    child: const Icon(Icons.add_rounded),
                   ),
                 ),
               ],

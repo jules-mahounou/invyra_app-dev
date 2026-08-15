@@ -480,21 +480,7 @@ class _ScannerNavItem extends StatelessWidget {
         children: [
           Positioned(
             bottom: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: AppSpacing.xxl),
-                Text(
-                  'Scanner',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.noirDoux.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
+            child: SizedBox(height: AppSpacing.xxl),
           ),
           Positioned(
             top: -20,
