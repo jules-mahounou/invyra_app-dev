@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -88,75 +88,91 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.xl,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Modèles d’invitation',
-                      style: AppTypography.textTheme.displayMedium?.copyWith(
-                        color: AppColors.noirDoux,
-                        fontWeight: FontWeight.w700,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // -- En-tete fixe
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xs,
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Découvrez notre galerie exclusive',
-                      style: AppTypography.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.noirDoux.withValues(alpha: 0.62),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _SearchField(
-                      controller: _searchController,
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _TemplateFilters(
-                      selectedFilter: _selectedFilter,
-                      onChanged: (value) => setState(() => _selectedFilter = value),
-                    ),
-                    if (popularTemplates.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      const _SectionTitle(title: '⭐ Populaires'),
-                      const SizedBox(height: AppSpacing.md),
-                      for (final template in popularTemplates) ...[
-                        _TemplateLibraryCard(
-                          template: template,
-                          locked: false,
-                          onPreviewTap: () => _openWebPreview(template),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mod\u00e8les d\u2019invitation',
+                          style: AppTypography.textTheme.displayMedium?.copyWith(
+                            color: AppColors.noirDoux,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        if (template != popularTemplates.last) const SizedBox(height: AppSpacing.md),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'D\u00e9couvrez notre galerie exclusive',
+                          style: AppTypography.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.noirDoux.withValues(alpha: 0.62),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _SearchField(
+                          controller: _searchController,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _TemplateFilters(
+                          selectedFilter: _selectedFilter,
+                          onChanged: (value) => setState(() => _selectedFilter = value),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
                       ],
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    const _SectionTitle(title: 'Tous les modèles'),
-                    const SizedBox(height: AppSpacing.md),
-                    if (filteredTemplates.isEmpty)
-                      Text(
-                        'Aucun modèle ne correspond à votre recherche.',
-                        style: AppTypography.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.noirDoux.withValues(alpha: 0.70),
-                        ),
-                      )
-                    else
-                      for (final template in filteredTemplates) ...[
-                        _TemplateLibraryCard(
-                          template: template,
-                          locked: false,
-                          onPreviewTap: () => _openWebPreview(template),
-                        ),
-                        if (template != filteredTemplates.last) const SizedBox(height: AppSpacing.md),
+                    ),
+                  ),
+                  // -- Liste scrollable
+                  Expanded(
+                    child: ListView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl,
+                      ),
+                      children: [
+                        if (popularTemplates.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          const _SectionTitle(title: '\u2b50 Populaires'),
+                          const SizedBox(height: AppSpacing.md),
+                          for (final template in popularTemplates) ...[
+                            _TemplateLibraryCard(
+                              template: template,
+                              locked: false,
+                              onPreviewTap: () => _openWebPreview(template),
+                            ),
+                            if (template != popularTemplates.last)
+                              const SizedBox(height: AppSpacing.md),
+                          ],
+                        ],
+                        const SizedBox(height: AppSpacing.lg),
+                        const _SectionTitle(title: 'Tous les mod\u00e8les'),
+                        const SizedBox(height: AppSpacing.md),
+                        if (filteredTemplates.isEmpty)
+                          Text(
+                            'Aucun mod\u00e8le ne correspond \u00e0 votre recherche.',
+                            style: AppTypography.textTheme.bodyMedium?.copyWith(
+                              color: AppColors.noirDoux.withValues(alpha: 0.70),
+                            ),
+                          )
+                        else
+                          for (final template in filteredTemplates) ...[
+                            _TemplateLibraryCard(
+                              template: template,
+                              locked: false,
+                              onPreviewTap: () => _openWebPreview(template),
+                            ),
+                            if (template != filteredTemplates.last)
+                              const SizedBox(height: AppSpacing.md),
+                          ],
                       ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
