@@ -116,18 +116,18 @@ class EventsScreenState extends State<EventsScreen> {
                     constraints: const BoxConstraints(
                       maxWidth: AppConstants.maxContentWidth,
                     ),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                        AppSpacing.xxl + AppSpacing.xl,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── En-tête fixe ──────────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            AppSpacing.md,
+                          ),
+                          child: Text(
                             'Mes événements',
                             style: AppTypography.textTheme.displayMedium
                                 ?.copyWith(
@@ -135,38 +135,67 @@ class EventsScreenState extends State<EventsScreen> {
                                   fontWeight: FontWeight.w700,
                                 ),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _EventFilters(
+                        ),
+                        // ── Filtres fixes ─────────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.lg,
+                            0,
+                            AppSpacing.lg,
+                            AppSpacing.md,
+                          ),
+                          child: _EventFilters(
                             selectedFilter: _selectedFilter,
                             onChanged: (value) =>
                                 setState(() => _selectedFilter = value),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          if (events.isEmpty)
-                            const _EmptyEvents()
-                          else
-                            for (final event in events) ...[
-                              InkWell(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => EventDetailScreen(
-                                        eventId: event['id'] as String,
+                        ),
+                        // ── Liste scrollable ──────────────────────────────
+                        Expanded(
+                          child: events.isEmpty
+                              ? const SingleChildScrollView(
+                                  physics: AlwaysScrollableScrollPhysics(),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.lg,
+                                  ),
+                                  child: _EmptyEvents(),
+                                )
+                              : ListView.separated(
+                                  physics: const AlwaysScrollableScrollPhysics(
+                                    parent: BouncingScrollPhysics(),
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    AppSpacing.lg,
+                                    0,
+                                    AppSpacing.lg,
+                                    AppSpacing.xxl + AppSpacing.xl,
+                                  ),
+                                  itemCount: events.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: AppSpacing.md),
+                                  itemBuilder: (_, i) {
+                                    final event = events[i];
+                                    return InkWell(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => EventDetailScreen(
+                                              eventId:
+                                                  event['id'] as String,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.lg,
                                       ),
-                                    ),
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.lg,
+                                      child: _EventCard(event: event),
+                                    );
+                                  },
                                 ),
-                                child: _EventCard(event: event),
-                              ),
-                              if (event != events.last)
-                                const SizedBox(height: AppSpacing.md),
-                            ],
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
