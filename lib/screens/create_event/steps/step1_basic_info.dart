@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/supabase_schema.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_decorations.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../services/event_service.dart';
@@ -306,18 +305,9 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: AppDecorations.cardDecoration.copyWith(
-            color: AppColors.blancCasse,
-            border: Border.all(
-              color: AppColors.orAfricain.withValues(alpha: 0.16),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               _fieldLabel('Nom de l’événement'),
               const SizedBox(height: AppSpacing.sm),
               _styledField(
@@ -490,7 +480,6 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
               ),
             ],
           ),
-        ),
         if (_isLoading)
           Positioned.fill(
             child: ColoredBox(
@@ -554,41 +543,32 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
   }
 
   Widget _customInfoCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.beigeCremeAlt.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.orAfricain.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        children: [
-          _styledField(
-            controller: _customField1LabelController,
-            hint: 'Ex: Thème, Dress code, Âge...',
-            icon: Icons.label_outline,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _styledField(
-            controller: _customField1ValueController,
-            hint: 'Ex: Soirée blanche, Black tie, 30 ans...',
-            icon: Icons.edit_note_rounded,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _styledField(
-            controller: _customField2LabelController,
-            hint: 'Ex: Intervenant, RSVP avant le...',
-            icon: Icons.label_outline,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _styledField(
-            controller: _customField2ValueController,
-            hint: 'Ex: Dr. Amina Koné, 10 juin 2025...',
-            icon: Icons.edit_note_rounded,
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        _styledField(
+          controller: _customField1LabelController,
+          hint: 'Ex: Thème, Dress code, Âge...',
+          icon: Icons.label_outline,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _styledField(
+          controller: _customField1ValueController,
+          hint: 'Ex: Soirée blanche, Black tie, 30 ans...',
+          icon: Icons.edit_note_rounded,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _styledField(
+          controller: _customField2LabelController,
+          hint: 'Ex: Intervenant, RSVP avant le...',
+          icon: Icons.label_outline,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _styledField(
+          controller: _customField2ValueController,
+          hint: 'Ex: Dr. Amina Koné, 10 juin 2025...',
+          icon: Icons.edit_note_rounded,
+        ),
+      ],
     );
   }
 

@@ -40,11 +40,15 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(
+            color: AppColors.noirDoux.withValues(alpha: 0.12),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(
+            color: AppColors.noirDoux.withValues(alpha: 0.12),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
