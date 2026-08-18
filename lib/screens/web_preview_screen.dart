@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../core/theme/app_colors.dart';
+import '../core/widgets/app_loader.dart';
 import '../models/event_model.dart';
 
 class WebPreviewScreen extends StatefulWidget {
@@ -97,11 +97,7 @@ class _WebPreviewScreenState extends State<WebPreviewScreen> {
         children: [
           WebViewWidget(controller: _controller),
           if (_isLoading)
-            Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.violetRoyal),
-              ),
-            ),
+            const AppLoader(size: 60),
         ],
       ),
     );

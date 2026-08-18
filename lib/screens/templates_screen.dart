@@ -6,6 +6,7 @@ import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../core/widgets/app_loader.dart';
 import 'web_preview_screen.dart';
 
 class TemplatesScreen extends StatefulWidget {
@@ -66,9 +67,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         future: _templatesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.violetRoyal),
-            );
+            return const AppLoaderScreen();
           }
           if (snapshot.hasError) {
             return Center(

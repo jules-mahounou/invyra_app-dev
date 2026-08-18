@@ -11,6 +11,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../core/widgets/app_loader.dart';
 import '../services/event_service.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
@@ -100,10 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Material(
-        color: AppColors.blancCasse,
-        child: Center(child: CircularProgressIndicator(color: AppColors.violetRoyal)),
-      );
+      return const AppLoaderScreen();
     }
 
     final plan = _ProfilePlan.from(_accountType);

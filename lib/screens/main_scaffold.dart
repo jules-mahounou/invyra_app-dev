@@ -10,6 +10,7 @@ import '../core/constants/app_nav_icons.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../core/widgets/app_loader.dart';
 import '../services/event_service.dart';
 import 'create_event_screen.dart';
 import 'events_screen.dart';
@@ -249,7 +250,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                     if (isLoading)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                        child: Center(child: CircularProgressIndicator(color: AppColors.violetRoyal)),
+                        child: Center(child: AppLoader()),
                       )
                     else if (errorMessage != null)
                       Padding(

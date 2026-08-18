@@ -8,6 +8,7 @@ import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
+import '../core/widgets/app_loader.dart';
 import '../models/event_model.dart';
 import '../services/event_service.dart';
 import 'create_event/steps/step2_template.dart';
@@ -268,9 +269,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (_isLoading) {
       return const Material(
         color: AppColors.blancCasse,
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.violetRoyal),
-        ),
+        child: const AppLoaderScreen(),
       );
     }
 
