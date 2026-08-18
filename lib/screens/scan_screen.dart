@@ -34,6 +34,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
   _ScanResultType? _resultType;
   bool _isProcessing = false;
   bool _cameraPermissionDenied = false;
+  bool _isCameraInitializing = true; // true jusqu'à résolution de la permission
 
   String? _scannedGuestName;
   String? _errorMessage;
@@ -60,19 +61,28 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
           detectionSpeed: DetectionSpeed.noDuplicates,
         );
         _cameraPermissionDenied = false;
+        _isCameraInitializing = false;
       });
     } else if (status.isPermanentlyDenied) {
-      setState(() => _cameraPermissionDenied = true);
+      setState(() {
+        _cameraPermissionDenied = true;
+        _isCameraInitializing = false;
+      });
     } else {
-      // Refus simple — on peut re-demander la prochaine fois
-      setState(() => _cameraPermissionDenied = true);
+      setState(() {
+        _cameraPermissionDenied = true;
+        _isCameraInitializing = false;
+      });
     }
   }
 
   @override
   void dispose() {
     _scanController.dispose();
+    // Arrêter proprement le controller avant de le disposer
+    _cameraController?.stop();
     _cameraController?.dispose();
+    _cameraController = null;
     super.dispose();
   }
 
@@ -194,7 +204,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                         ? _PermissionDeniedFrame(
                             onOpenSettings: () => openAppSettings(),
                           )
-                        : _cameraController == null
+                        : _isCameraInitializing || _cameraController == null
                             ? const SizedBox(
                                 width: 280,
                                 height: 280,
@@ -328,6 +338,30 @@ class _ScanFrame extends StatelessWidget {
                   ? MobileScanner(
                       controller: cameraController,
                       onDetect: onDetect,
+                      errorBuilder: (context, error) {
+                        return Container(
+                          color: Colors.black,
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  color: AppColors.error,
+                                  size: 36,
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  'Impossible d\'accéder à la caméra',
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.textTheme.bodySmall
+                                      ?.copyWith(color: AppColors.blancCasse),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     )
                   : Container(
                       color: Colors.black.withValues(alpha: 0.75),
