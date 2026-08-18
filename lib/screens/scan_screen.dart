@@ -162,7 +162,8 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     return Material(
       color: AppColors.noirDoux,
       child: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
             child: SingleChildScrollView(

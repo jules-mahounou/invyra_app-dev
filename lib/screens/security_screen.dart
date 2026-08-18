@@ -142,7 +142,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
     return Material(
       color: AppColors.blancCasse,
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
           child: SingleChildScrollView(

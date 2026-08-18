@@ -309,7 +309,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return Center(
+            return Align(
+              alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
                   maxWidth: AppConstants.maxContentWidth,

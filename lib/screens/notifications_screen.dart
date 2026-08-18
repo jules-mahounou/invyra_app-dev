@@ -167,7 +167,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Material(
       color: AppColors.blancCasse,
       child: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
             child: _isLoading

@@ -86,7 +86,8 @@ class HomeTabContentState extends State<HomeTabContent> {
 
     return Material(
       color: AppColors.blancCasse,
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
           child: RefreshIndicator(
@@ -315,7 +316,8 @@ class _HomeLoadingView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.blancCasse,
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(
             maxWidth: AppConstants.maxContentWidth,

@@ -85,7 +85,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
           final filteredTemplates = _filteredTemplates(allTemplates);
           final popularTemplates = filteredTemplates.where((template) => template['is_popular'] == true).toList();
 
-          return Center(
+          return Align(
+            alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
               child: Column(

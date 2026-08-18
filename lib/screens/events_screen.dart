@@ -111,7 +111,8 @@ class EventsScreenState extends State<EventsScreen> {
             color: AppColors.blancCasse,
             child: Stack(
               children: [
-                Center(
+                Align(
+                  alignment: Alignment.topCenter,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       maxWidth: AppConstants.maxContentWidth,
