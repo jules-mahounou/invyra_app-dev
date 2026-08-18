@@ -11,9 +11,9 @@ class AppAssets {
   static const String mascotInviteManager = 'assets/images/mascots/invite_manager.png';
 
   // Logos
-  static const String logoFull = 'assets/images/logos/logo.png';
-  static const String logoMark = 'assets/images/logos/logo.png';
-  static const String logoWhite = 'assets/images/logos/logo.png';
+  static const String logoFull = 'assets/images/logos/logo_.png';
+  static const String logoMark = 'assets/images/logos/logo_.png';
+  static const String logoWhite = 'assets/images/logos/logo_.png';
   static const String googleLogo = 'assets/images/logos/40px-Google__G__logo.svg.png';
 
   // Templates aperçus
