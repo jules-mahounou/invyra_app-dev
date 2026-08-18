@@ -591,11 +591,14 @@ class _EmptyEventsPlaceholder extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Image.asset(
-            AppAssets.mascotWelcome,
-            height: AppSpacing.xxl + AppSpacing.lg,
-            fit: BoxFit.contain,
+          Center(
+            child: Image.asset(
+              AppAssets.mascotWelcome,
+              height: AppSpacing.xxl + AppSpacing.lg,
+              fit: BoxFit.contain,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
