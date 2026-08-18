@@ -10,6 +10,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
+import '../core/widgets/app_loader.dart';
 import 'event_detail_screen.dart';
 
 /* TODO: données mockées — décommenter pour tester sans backend
@@ -75,9 +76,7 @@ class EventsScreenState extends State<EventsScreen> {
       future: _eventsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.violetRoyal),
-          );
+          return const AppLoaderScreen();
         }
 
         if (snapshot.hasError) {
