@@ -8,6 +8,7 @@ import '../core/constants/app_assets.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';  
 import '../core/theme/app_typography.dart';
+import '../core/widgets/app_loader.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? flashMessage;
@@ -282,6 +283,14 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          // Overlay loader pendant la connexion
+          if (_isLoading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: AppColors.blancCasse.withValues(alpha: 0.85),
+                child: const AppLoader(size: 80),
+              ),
+            ),
         ],
       ),
     );

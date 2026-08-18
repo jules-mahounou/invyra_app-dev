@@ -10,7 +10,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
-import '../core/widgets/app_shimmer.dart';
+import '../core/widgets/app_loader.dart';
 import '../widgets/event_thumbnail.dart';
 import 'event_detail_screen.dart';
 
@@ -75,7 +75,7 @@ class HomeTabContentState extends State<HomeTabContent> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const _HomeLoadingView();
+      return const AppLoaderScreen();
     }
 
     if (_errorMessage != null) {
@@ -303,60 +303,6 @@ class _CreateEventCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeLoadingView extends StatelessWidget {
-  const _HomeLoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.blancCasse,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AppConstants.maxContentWidth,
-          ),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            child: Column(
-              children: [
-                const ShimmerBox(
-                  height: 140,
-                  borderRadius: BorderRadius.all(Radius.circular(AppRadius.xl)),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                const ShimmerBox(height: 72),
-                const SizedBox(height: AppSpacing.lg),
-                const ShimmerBox(height: 120),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  children: [
-                    Expanded(child: ShimmerBox(height: 88)),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(child: ShimmerBox(height: 88)),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(child: ShimmerBox(height: 88)),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                const ShimmerBox(height: 160),
-                const SizedBox(height: AppSpacing.lg),
-                const ShimmerBox(height: 220),
-              ],
-            ),
-          ),
         ),
       ),
     );
