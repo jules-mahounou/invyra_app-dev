@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/constants/app_assets.dart';
 import '../core/constants/app_constants.dart';
@@ -27,14 +28,13 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _scanController;
-  final MobileScannerController _cameraController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
-  
+  MobileScannerController? _cameraController;
+
   bool _flashEnabled = false;
   _ScanResultType? _resultType;
   bool _isProcessing = false;
-  
+  bool _cameraPermissionDenied = false;
+
   String? _scannedGuestName;
   String? _errorMessage;
 
@@ -47,12 +47,32 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
+    _initCamera();
+  }
+
+  Future<void> _initCamera() async {
+    final status = await Permission.camera.request();
+    if (!mounted) return;
+
+    if (status.isGranted) {
+      setState(() {
+        _cameraController = MobileScannerController(
+          detectionSpeed: DetectionSpeed.noDuplicates,
+        );
+        _cameraPermissionDenied = false;
+      });
+    } else if (status.isPermanentlyDenied) {
+      setState(() => _cameraPermissionDenied = true);
+    } else {
+      // Refus simple — on peut re-demander la prochaine fois
+      setState(() => _cameraPermissionDenied = true);
+    }
   }
 
   @override
   void dispose() {
     _scanController.dispose();
-    _cameraController.dispose();
+    _cameraController?.dispose();
     super.dispose();
   }
 
@@ -163,18 +183,32 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                     flashEnabled: _flashEnabled,
                     onBack: () => Navigator.of(context).pop(),
                     onFlashToggle: () async {
-                      await _cameraController.toggleTorch();
+                      await _cameraController?.toggleTorch();
                       setState(() => _flashEnabled = !_flashEnabled);
                     },
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   Center(
-                    child: _ScanFrame(
-                      animation: _scanController,
-                      cameraController: _cameraController,
-                      onDetect: _onQrCodeDetected,
-                      showCamera: _resultType == null && !_isProcessing,
-                    ),
+                    child: _cameraPermissionDenied
+                        ? _PermissionDeniedFrame(
+                            onOpenSettings: () => openAppSettings(),
+                          )
+                        : _cameraController == null
+                            ? const SizedBox(
+                                width: 280,
+                                height: 280,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppColors.violetRoyal,
+                                  ),
+                                ),
+                              )
+                            : _ScanFrame(
+                                animation: _scanController,
+                                cameraController: _cameraController!,
+                                onDetect: _onQrCodeDetected,
+                                showCamera: _resultType == null && !_isProcessing,
+                              ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Center(
@@ -566,6 +600,59 @@ class _ResultBadge extends StatelessWidget {
         style: AppTypography.textTheme.bodySmall?.copyWith(
           color: color,
           fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _PermissionDeniedFrame extends StatelessWidget {
+  final VoidCallback onOpenSettings;
+  const _PermissionDeniedFrame({required this.onOpenSettings});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 280,
+      height: 280,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.6)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.camera_alt_outlined, color: AppColors.blancCasse, size: 40),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Permission caméra requise',
+              textAlign: TextAlign.center,
+              style: AppTypography.textTheme.bodyMedium?.copyWith(
+                color: AppColors.blancCasse,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Autorisez l\'accès à la caméra dans les paramètres.',
+              textAlign: TextAlign.center,
+              style: AppTypography.textTheme.bodySmall?.copyWith(
+                color: AppColors.blancCasse.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
+              onPressed: onOpenSettings,
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.violetRoyal,
+                foregroundColor: AppColors.blancCasse,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              ),
+              child: const Text('Ouvrir les paramètres'),
+            ),
+          ],
         ),
       ),
     );
