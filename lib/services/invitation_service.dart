@@ -5,11 +5,28 @@ import '../core/constants/supabase_schema.dart';
 class InvitationService {
   final _client = Supabase.instance.client;
 
+  /// Vérifie que l'événement appartient bien à l'utilisateur connecté.
+  /// La table `invitations` n'a pas de colonne `user_id` propre : on passe
+  /// donc par l'événement parent pour éviter qu'un utilisateur ne manipule
+  /// les invitations d'un événement qui n'est pas le sien.
+  Future<void> _assertEventOwnership(String eventId) async {
+    final row = await _client
+        .from('events')
+        .select('id')
+        .eq('id', eventId)
+        .eq('user_id', _client.auth.currentUser!.id)
+        .maybeSingle();
+    if (row == null) {
+      throw Exception('Événement introuvable ou accès refusé.');
+    }
+  }
+
   Future<void> createInvitationsForEvent({
     required String eventId,
     required String channel,
   }) async {
     try {
+      await _assertEventOwnership(eventId);
       final validatedChannel = sendChannelOrDefault(channel);
       final guests = await _client
           .from('guests')
@@ -30,6 +47,7 @@ class InvitationService {
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception(
         'Connexion impossible. Vérifiez votre connexion internet.',
       );
@@ -38,6 +56,7 @@ class InvitationService {
 
   Future<void> markInvitationsAsSent(String eventId) async {
     try {
+      await _assertEventOwnership(eventId);
       final now = DateTime.now().toUtc().toIso8601String();
       final sent = await _client
           .from('invitations')
@@ -52,6 +71,7 @@ class InvitationService {
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception(
         'Connexion impossible. Vérifiez votre connexion internet.',
       );
@@ -62,6 +82,7 @@ class InvitationService {
     String eventId,
   ) async {
     try {
+      await _assertEventOwnership(eventId);
       final response = await _client
           .from('invitations')
           .select('''
@@ -85,6 +106,7 @@ class InvitationService {
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception(
         'Connexion impossible. Vérifiez votre connexion internet.',
       );

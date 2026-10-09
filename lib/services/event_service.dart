@@ -131,7 +131,8 @@ class EventService {
       await _client
           .from('events')
           .update({'logo_url': logoUrl})
-          .eq('id', eventId);
+          .eq('id', eventId)
+          .eq('user_id', _client.auth.currentUser!.id);
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
@@ -289,7 +290,8 @@ class EventService {
       await _client
           .from('events')
           .update({'template_id': templateId})
-          .eq('id', eventId);
+          .eq('id', eventId)
+          .eq('user_id', _client.auth.currentUser!.id);
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {

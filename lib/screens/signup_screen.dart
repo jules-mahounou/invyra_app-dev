@@ -88,6 +88,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
       final user = response.user;
       if (user == null) {
+        if (!mounted) return;
         setState(() => _errorMessage = 'Impossible de créer le compte. Réessayez.');
         return;
       }
@@ -108,6 +109,7 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
+      if (!mounted) return;
       setState(() {
         _errorMessage =
             'Compte créé. Vérifiez votre boîte mail pour confirmer votre inscription, puis connectez-vous.';

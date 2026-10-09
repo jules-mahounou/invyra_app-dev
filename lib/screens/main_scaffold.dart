@@ -202,11 +202,13 @@ class _MainScaffoldState extends State<MainScaffold> {
           builder: (ctx, setSheetState) {
             if (isLoading && events.isEmpty && errorMessage == null) {
               _eventService.getMyEvents().then((result) {
+                if (!ctx.mounted) return;
                 setSheetState(() {
                   events = result;
                   isLoading = false;
                 });
               }).catchError((e) {
+                if (!ctx.mounted) return;
                 setSheetState(() {
                   errorMessage = e.toString().replaceFirst('Exception: ', '');
                   isLoading = false;

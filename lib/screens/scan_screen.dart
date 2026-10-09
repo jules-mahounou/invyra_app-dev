@@ -79,10 +79,22 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     _scanController.dispose();
-    // Arrêter proprement le controller avant de le disposer
-    _cameraController?.stop();
-    _cameraController?.dispose();
+    // Arrêter proprement le controller avant de le disposer, sans bloquer
+    // dispose() ni laisser une exception asynchrone non interceptée si la
+    // caméra est encore en cours d'initialisation.
+    final controller = _cameraController;
     _cameraController = null;
+    if (controller != null) {
+      () async {
+        try {
+          await controller.stop();
+        } catch (_) {
+          // La caméra peut déjà être arrêtée ou avoir échoué à s'initialiser.
+        } finally {
+          await controller.dispose();
+        }
+      }();
+    }
     super.dispose();
   }
 
@@ -135,7 +147,10 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
         });
       } else {
         _setFailureState('Billet invalide ou ne correspond pas à cet événement.');
-      }    } catch (e) {
+      }
+    } catch (e, stack) {
+      debugPrint('Erreur de validation QR: $e\n$stack');
+      if (!mounted) return;
       _setFailureState('Erreur de connexion au serveur.');
     } finally {
       if (mounted) {
@@ -195,6 +210,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                     onBack: () => Navigator.of(context).pop(),
                     onFlashToggle: () async {
                       await _cameraController?.toggleTorch();
+                      if (!mounted) return;
                       setState(() => _flashEnabled = !_flashEnabled);
                     },
                   ),

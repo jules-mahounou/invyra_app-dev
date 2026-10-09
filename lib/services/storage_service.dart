@@ -4,6 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class StorageService {
   final _client = Supabase.instance.client;
 
+  /// `image_picker` ne limite que les dimensions, pas le poids du fichier
+  /// (ex: un PNG/HEIC de petite résolution mais très compressé peut rester
+  /// lourd) : on vérifie donc le poids ici avant de tenter l'upload, pour
+  /// échouer vite avec un message clair plutôt qu'un timeout réseau opaque.
+  static const int maxFileSizeBytes = 8 * 1024 * 1024; // 8 Mo
+
   // Upload logo → retourne l'URL publique
   // Chemin dans le bucket : {userId}/{eventId}/{fileName}
   Future<String?> uploadEventLogo({
@@ -12,9 +18,14 @@ class StorageService {
     required Uint8List fileBytes,
     required String fileName,
   }) async {
+    if (fileBytes.lengthInBytes > maxFileSizeBytes) {
+      throw Exception(
+        'Image trop volumineuse (max ${maxFileSizeBytes ~/ (1024 * 1024)} Mo).',
+      );
+    }
     try {
       final String path = '$userId/$eventId/$fileName';
-      
+
       await _client.storage.from('event-logos').uploadBinary(
         path,
         fileBytes,

@@ -62,6 +62,7 @@ class GuestManagerWidgetState extends State<GuestManagerWidget> {
 
   /// Appelé par Step3Guests pour générer les billets sur Supabase
   Future<void> triggerSendInvitations() async {
+    if (_isBusy) return;
     if (_guests.isEmpty) {
       throw Exception('Veuillez ajouter au moins un invité avant de générer les billets.');
     }
@@ -211,7 +212,7 @@ class GuestManagerWidgetState extends State<GuestManagerWidget> {
 
     setState(() => _isBusy = true);
     try {
-      await _guestService.deleteGuest(guestId);
+      await _guestService.deleteGuest(guestId: guestId, eventId: widget.eventId);
       if (!mounted) return;
       setState(() {
         _guests.removeWhere((g) => g['id'] == guestId);

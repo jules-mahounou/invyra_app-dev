@@ -35,6 +35,23 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
   late Map<String, dynamic> _values;
   bool _isSaving = false;
 
+  // Cache des TextEditingController par clé de champ, pour qu'un rebuild
+  // (ex: toggle d'un autre champ) ne recrée pas un controller à chaque fois
+  // — ce qui ferait perdre le focus / la position du curseur en cours de saisie.
+  final Map<String, TextEditingController> _controllers = {};
+
+  TextEditingController _controllerFor(String key, String initialText) {
+    return _controllers.putIfAbsent(key, () => TextEditingController(text: initialText));
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -282,7 +299,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
     final key = field['key'] as String;
     final label = field['label'] as String? ?? key;
     final placeholder = field['placeholder'] as String? ?? '';
-    final controller = TextEditingController(text: _values[key] as String? ?? '');
+    final controller = _controllerFor(key, _values[key] as String? ?? '');
     final showKey = '${key}_visible';
     final isVisible = _values[showKey] as bool? ?? true;
 
@@ -313,7 +330,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
     final key = field['key'] as String;
     final label = field['label'] as String? ?? key;
     final placeholder = field['placeholder'] as String? ?? '';
-    final controller = TextEditingController(text: _values[key] as String? ?? '');
+    final controller = _controllerFor(key, _values[key] as String? ?? '');
     final showKey = '${key}_visible';
     final isVisible = _values[showKey] as bool? ?? true;
 
@@ -345,7 +362,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
     final key = field['key'] as String;
     final label = field['label'] as String? ?? key;
     final placeholder = field['placeholder'] as String? ?? 'https://...';
-    final controller = TextEditingController(text: _values[key] as String? ?? '');
+    final controller = _controllerFor(key, _values[key] as String? ?? '');
     final showKey = '${key}_visible';
     final isVisible = _values[showKey] as bool? ?? true;
 
@@ -675,7 +692,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: TextField(
-                      controller: TextEditingController(text: items[i]['label'] as String? ?? ''),
+                      controller: _controllerFor('${key}_timeline_$i', items[i]['label'] as String? ?? ''),
                       onChanged: (v) {
                         items[i]['label'] = v;
                         _values[key] = items;

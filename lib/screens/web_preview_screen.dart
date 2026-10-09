@@ -37,8 +37,12 @@ class _WebPreviewScreenState extends State<WebPreviewScreen> {
       ..setBackgroundColor(const Color(0x00000000))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() => _isLoading = true),
-          onPageFinished: (_) => setState(() => _isLoading = false),
+          onPageStarted: (_) {
+            if (mounted) setState(() => _isLoading = true);
+          },
+          onPageFinished: (_) {
+            if (mounted) setState(() => _isLoading = false);
+          },
           onWebResourceError: (e) => debugPrint("Erreur WebView: ${e.description}"),
         ),
       )

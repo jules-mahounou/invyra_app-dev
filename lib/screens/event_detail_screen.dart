@@ -58,10 +58,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _loadEvent() async {
     try {
-      setState(() => _isLoading = true);
-      
+      if (mounted) setState(() => _isLoading = true);
+
       final data = await _eventService.getEventById(widget.eventId);
-      
+
+      if (!mounted) return;
       setState(() {
         // Réinitialiser avant chaque chargement
         _webTemplateKey = null;
@@ -73,10 +74,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ? Map<String, dynamic>.from(tpl['config'] as Map)
               : {};
         }
-        _event = EventModel.fromMap(data); 
+        _event = EventModel.fromMap(data);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;

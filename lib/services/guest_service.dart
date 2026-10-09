@@ -7,6 +7,22 @@ class GuestService {
   final _client = Supabase.instance.client;
   final _edgeService = const EdgeFunctionService();
 
+  /// Vérifie que l'événement appartient bien à l'utilisateur connecté.
+  /// Les tables `guests`/`invitations` n'ont pas de colonne `user_id` propre :
+  /// on passe donc par l'événement parent pour éviter qu'un utilisateur
+  /// ne manipule les invités d'un événement qui n'est pas le sien.
+  Future<void> _assertEventOwnership(String eventId) async {
+    final row = await _client
+        .from('events')
+        .select('id')
+        .eq('id', eventId)
+        .eq('user_id', _client.auth.currentUser!.id)
+        .maybeSingle();
+    if (row == null) {
+      throw Exception('Événement introuvable ou accès refusé.');
+    }
+  }
+
   Future<Map<String, dynamic>> addGuest({
     required String eventId,
     required String fullName,
@@ -15,6 +31,7 @@ class GuestService {
     String importSource = 'manual',
   }) async {
     try {
+      await _assertEventOwnership(eventId);
       final response = await _client
           .from('guests')
           .insert(
@@ -45,23 +62,34 @@ class GuestService {
     }
   }
 
-  Future<void> deleteGuest(String guestId) async {
+  Future<void> deleteGuest({
+    required String guestId,
+    required String eventId,
+  }) async {
     try {
-      await _client.from('guests').delete().eq('id', guestId);
+      await _assertEventOwnership(eventId);
+      await _client
+          .from('guests')
+          .delete()
+          .eq('id', guestId)
+          .eq('event_id', eventId);
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
     }
   }
 
   Future<List<Map<String, dynamic>>> getGuestsByEvent(String eventId) async {
     try {
+      await _assertEventOwnership(eventId);
       final response = await _client.from('guests').select().eq('event_id', eventId);
       return List<Map<String, dynamic>>.from(response);
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
     }
   }
