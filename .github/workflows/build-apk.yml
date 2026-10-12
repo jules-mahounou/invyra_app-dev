@@ -40,8 +40,8 @@ jobs:
       - name: Installer les dépendances
         run: flutter pub get
 
-      - name: Build de l'APK (release)
-        run: flutter build apk --release
+      - name: Build de l'APK (release, un APK par architecture)
+        run: flutter build apk --release --split-per-abi
 
       - name: Récupérer le SHA court du commit
         id: vars
@@ -55,5 +55,13 @@ jobs:
           body: |
             Build automatique généré depuis le commit ${{ github.sha }} (branche `${{ github.ref_name }}`).
             Cette release est réécrite à chaque push : elle contient toujours le dernier APK buildé.
+
+            Un APK par architecture (plus léger qu'un APK universel) :
+            - `app-arm64-v8a-release.apk` → quasi tous les téléphones Android depuis ~2018 (c'est celui-là qu'il te faut dans le doute).
+            - `app-armeabi-v7a-release.apk` → vieux téléphones 32 bits.
+            - `app-x86_64-release.apk` → émulateurs uniquement.
           prerelease: true
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk

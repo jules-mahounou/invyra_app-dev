@@ -99,103 +99,98 @@ Deno.serve(async (req) => {
     (existingInvitations ?? []).map((entry) => [entry.guest_id, entry]),
   );
 
-  const results = [] as Array<{
-    guest_id: string;
-    invitation_id: string;
-    qr_code: string | null;
-    invitation_url: string;
-    public_token: string;
-  }>;
+  // --- Créer en UNE requête groupée les invitations manquantes, au lieu d'une
+  // requête par invité (qui ne tient pas la charge sur une liste de centaines
+  // d'invités : chaque await séquentiel ajoute de la latence réseau, avec un
+  // risque de dépasser le temps d'exécution max de l'Edge Function). ---
+  const guestsNeedingInvitation = guestIds.filter((id) => !existingByGuestId.has(id));
 
-  for (const guestId of guestIds) {
-    const existing = existingByGuestId.get(guestId);
-
-    if (existing) {
-      // qr_codes est un tableau côté PostgREST — prendre le premier élément
-      const qrEntry = Array.isArray(existing.qr_codes)
-        ? existing.qr_codes[0]
-        : existing.qr_codes;
-      const qrCode = qrEntry?.code ?? null;
-
-      // Si l'invitation existe mais n'a pas encore de QR code, on le crée
-      if (!qrCode) {
-        const qrUpsert = await supabaseAdmin
-          .from('qr_codes')
-          .upsert({
-            code: randomHex(32),
-            invitation_id: existing.id,
-            is_used: false,
-          }, { onConflict: 'invitation_id' })
-          .select('code')
-          .single();
-
-        const finalQrCode = qrUpsert.data?.code ?? null;
-        results.push({
-          guest_id: guestId,
-          invitation_id: existing.id,
-          qr_code: finalQrCode,
-          invitation_url: `https://invyra-web.vercel.app/i/${existing.public_token}`,
-          public_token: existing.public_token,
-        });
-      } else {
-        results.push({
-          guest_id: guestId,
-          invitation_id: existing.id,
-          qr_code: qrCode,
-          invitation_url: `https://invyra-web.vercel.app/i/${existing.public_token}`,
-          public_token: existing.public_token,
-        });
-      }
-      continue;
-    }
-
-    const invitationInsert = await supabaseAdmin
-      .from('invitations')
-      .insert({
-        event_id: eventId,
-        guest_id: guestId,
-        public_token: randomHex(16),
-        channel,
-        status: 'brouillon',
-      })
-      .select('id, public_token')
-      .single();
-
-    if (invitationInsert.error || !invitationInsert.data) {
-      return jsonResponse(500, { error: invitationInsert.error?.message ?? 'Unable to create invitation' });
-    }
-
-    const newInvitationId = invitationInsert.data.id;
-    const newPublicToken = invitationInsert.data.public_token;
-
-    // Tenter d'insérer le QR code — ignorer si déjà existant (doublon sur invitation_id)
-    await supabaseAdmin
-      .from('qr_codes')
-      .insert({
-        code: randomHex(32),
-        invitation_id: newInvitationId,
-        is_used: false,
-      })
-      .select('code')
-      .single();
-
-    // Relire le QR code réel en base (qu'il vienne d'être créé ou existait déjà)
-    const qrRead = await supabaseAdmin
-      .from('qr_codes')
-      .select('code')
-      .eq('invitation_id', newInvitationId)
-      .single();
-
-    const finalCode = qrRead.data?.code ?? null;
-
-    results.push({
+  let newInvitations: Array<{ id: string; guest_id: string; public_token: string }> = [];
+  if (guestsNeedingInvitation.length > 0) {
+    const rows = guestsNeedingInvitation.map((guestId) => ({
+      event_id: eventId,
       guest_id: guestId,
-      invitation_id: newInvitationId,
-      qr_code: finalCode,
-      invitation_url: `https://invyra-web.vercel.app/i/${newPublicToken}`,
-      public_token: newPublicToken,
+      public_token: randomHex(16),
+      channel,
+      status: 'brouillon',
+    }));
+
+    const { data, error } = await supabaseAdmin
+      .from('invitations')
+      .insert(rows)
+      .select('id, guest_id, public_token');
+
+    if (error) {
+      return jsonResponse(500, { error: error.message });
+    }
+    newInvitations = data ?? [];
+  }
+
+  type InvitationInfo = { invitationId: string; publicToken: string; qrCode: string | null };
+  const infoByGuestId = new Map<string, InvitationInfo>();
+
+  for (const [guestId, entry] of existingByGuestId) {
+    const qrEntry = Array.isArray(entry.qr_codes) ? entry.qr_codes[0] : entry.qr_codes;
+    infoByGuestId.set(guestId, {
+      invitationId: entry.id,
+      publicToken: entry.public_token,
+      qrCode: qrEntry?.code ?? null,
     });
   }
+  for (const inv of newInvitations) {
+    infoByGuestId.set(inv.guest_id, {
+      invitationId: inv.id,
+      publicToken: inv.public_token,
+      qrCode: null,
+    });
+  }
+
+  // --- Même logique groupée pour les QR codes manquants ---
+  const invitationsNeedingQr = Array.from(infoByGuestId.values()).filter((info) => !info.qrCode);
+
+  if (invitationsNeedingQr.length > 0) {
+    const qrRows = invitationsNeedingQr.map((info) => ({
+      code: randomHex(32),
+      invitation_id: info.invitationId,
+      is_used: false,
+    }));
+
+    // ignoreDuplicates : si une requête concurrente a déjà créé le QR code
+    // entre-temps, on ne l'écrase surtout pas (il pourrait déjà être partagé).
+    const { error: qrInsertError } = await supabaseAdmin
+      .from('qr_codes')
+      .upsert(qrRows, { onConflict: 'invitation_id', ignoreDuplicates: true });
+
+    if (qrInsertError) {
+      return jsonResponse(500, { error: qrInsertError.message });
+    }
+
+    const invitationIds = invitationsNeedingQr.map((info) => info.invitationId);
+    const { data: qrRows2, error: qrReadError } = await supabaseAdmin
+      .from('qr_codes')
+      .select('invitation_id, code')
+      .in('invitation_id', invitationIds);
+
+    if (qrReadError) {
+      return jsonResponse(500, { error: qrReadError.message });
+    }
+
+    const codeByInvitationId = new Map((qrRows2 ?? []).map((r) => [r.invitation_id, r.code]));
+    for (const info of invitationsNeedingQr) {
+      info.qrCode = codeByInvitationId.get(info.invitationId) ?? info.qrCode;
+    }
+  }
+
+  const results = guestIds.map((guestId) => {
+    const info = infoByGuestId.get(guestId)!;
+    return {
+      guest_id: guestId,
+      invitation_id: info.invitationId,
+      qr_code: info.qrCode,
+      invitation_url: `https://invyra-web.vercel.app/i/${info.publicToken}`,
+      public_token: info.publicToken,
+    };
+  });
 
   const { count, error: countError } = await supabaseAdmin
     .from('invitations')

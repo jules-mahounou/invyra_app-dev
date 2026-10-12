@@ -127,26 +127,50 @@ Deno.serve(async (req) => {
     });
   }
 
-  await supabaseAdmin
+  // Réclamation atomique : UPDATE conditionné sur is_used=false pour éviter que
+  // deux scans simultanés du même billet (deux points de contrôle en même temps)
+  // le valident tous les deux. Un seul gagnera cette requête.
+  const { data: claimedRows, error: claimError } = await supabaseAdmin
     .from('qr_codes')
     .update({ is_used: true, used_at: now })
-    .eq('id', qrRecord.id);
+    .eq('id', qrRecord.id)
+    .eq('is_used', false)
+    .select('id');
+
+  if (claimError) {
+    return jsonResponse(500, { error: claimError.message });
+  }
+
+  if (!claimedRows || claimedRows.length === 0) {
+    // Un autre scan concurrent a gagné la course entre notre lecture et cette écriture.
+    await supabaseAdmin.from('event_scans').insert({
+      event_id: eventId,
+      guest_id: invitation.guest_id,
+      result: 'deja_utilise',
+      scanned_by: user.id,
+      scanned_at: now,
+    });
+
+    return jsonResponse(200, {
+      result: 'deja_utilise',
+      guest: guest
+        ? {
+            full_name: guest.full_name,
+            phone: guest.phone,
+            email: guest.email,
+          }
+        : null,
+    });
+  }
 
   await supabaseAdmin
     .from('invitations')
     .update({ status: 'confirme', confirmed_at: now })
     .eq('id', invitation.id);
 
-  const { data: currentEvent } = await supabaseAdmin
-    .from('events')
-    .select('guests_confirmed')
-    .eq('id', eventId)
-    .single();
-
-  await supabaseAdmin
-    .from('events')
-    .update({ guests_confirmed: (currentEvent?.guests_confirmed ?? 0) + 1 })
-    .eq('id', eventId);
+  // Incrément atomique via RPC (évite la perte d'incréments sous scans simultanés,
+  // contrairement à un read-then-write "select guests_confirmed" + "update +1").
+  await supabaseAdmin.rpc('increment_guests_confirmed', { event_id_param: eventId });
 
   await supabaseAdmin.from('event_scans').insert({
     event_id: eventId,

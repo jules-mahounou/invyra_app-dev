@@ -52,7 +52,7 @@ dependencies:
   url_launcher: ^6.3.2
   webview_flutter: ^4.13.1
   visibility_detector: ^0.4.0+2
-  mobile_scanner: ^7.2.0
+  mobile_scanner: ^7.4.2 # 7.2.1+ corrige le NPE R8/ML Kit qui cassait le scan en release
   flutter_colorpicker: ^1.1.0
   permission_handler: ^11.3.1
 
