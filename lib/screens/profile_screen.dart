@@ -40,6 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _accountType = 'gratuit';
   int _eventsCount = 0;
   int? _maxEvents;
+  bool _deviceConflict = false;
 
   @override
   void initState() {
@@ -52,15 +53,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final userId = _client.auth.currentUser!.id;
       
-      // Charger profil et événements en parallèle
       final userDataFuture = _client.from('users').select('full_name, username, bio, avatar_url, account_type').eq('id', userId).single();
-      final eventsFuture = _eventService.getMyEvents();
-      
-      final userData = await userDataFuture;
-      final events = await eventsFuture;
+      final quotaFuture = _eventService.checkEventCreationQuota();
 
-      // Quota selon le plan
-      final quota = await _eventService.checkEventCreationQuota();
+      final userData = await userDataFuture;
+      final quota = await quotaFuture;
 
       if (!mounted) return;
       setState(() {
@@ -69,8 +66,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _bio = userData['bio'] as String? ?? '';
         _avatarUrl = userData['avatar_url'] as String?;
         _accountType = userData['account_type'] as String? ?? 'gratuit';
-        _eventsCount = events.length;
+        // Même comptage que le quota (événements clôturés exclus).
+        _eventsCount = quota['currentCount'] as int? ?? 0;
         _maxEvents = quota['maxAllowed'] as int?;
+        _deviceConflict = quota['reason'] == 'device_conflict';
         _isLoading = false;
       });
     } catch (e) {
@@ -134,6 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     plan: plan,
                     eventsCount: _eventsCount,
                     maxEvents: _maxEvents,
+                    deviceConflict: _deviceConflict,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   const _SettingsMenu(),
@@ -329,17 +329,21 @@ class _SubscriptionSummary extends StatelessWidget {
   final _ProfilePlan plan;
   final int eventsCount;
   final int? maxEvents;
+  final bool deviceConflict;
 
   const _SubscriptionSummary({
     required this.plan,
     required this.eventsCount,
     required this.maxEvents,
+    this.deviceConflict = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final isUnlimited = maxEvents == null;
-    final progress = isUnlimited ? 0.0 : (eventsCount / maxEvents!).clamp(0.0, 1.0);
+    final progress = (isUnlimited || maxEvents == 0)
+        ? 0.0
+        : (eventsCount / maxEvents!).clamp(0.0, 1.0);
 
     return Container(
       width: double.infinity,
@@ -382,7 +386,16 @@ class _SubscriptionSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          if (!isUnlimited) ...[
+          if (deviceConflict) ...[
+            Text(
+              'Un compte gratuit existe déjà sur cet appareil : ce compte ne dispose pas d’événements gratuits. Connectez-vous avec l’autre compte, ou choisissez une offre payante.',
+              style: AppTypography.textTheme.bodySmall?.copyWith(
+                color: AppColors.noirDoux.withValues(alpha: 0.75),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ] else if (!isUnlimited) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.full),
               child: LinearProgressIndicator(

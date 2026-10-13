@@ -55,6 +55,8 @@ dependencies:
   mobile_scanner: ^7.4.2 # 7.2.1+ corrige le NPE R8/ML Kit qui cassait le scan en release
   flutter_colorpicker: ^1.1.0
   permission_handler: ^11.3.1
+  flutter_contacts: ^1.1.9+2
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

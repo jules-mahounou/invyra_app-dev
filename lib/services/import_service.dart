@@ -1,9 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+const String _templateCsvContent =
+    'Nom,Téléphone,Email\nJean Dupont,97123456,jean.dupont@example.com\nAwa Koffi,97654321,\n';
 
 class ImportService {
   Future<List<Map<String, dynamic>>?> pickAndParseFile() async {
@@ -18,7 +24,7 @@ class ImportService {
     final Uint8List? bytes = file.bytes;
     final extension = file.extension?.toLowerCase();
     if (bytes == null || extension == null) {
-      throw const FormatException('Format non reconnu');
+      throw const FormatException("Impossible de lire ce fichier. Utilisez un fichier .xlsx ou .csv.");
     }
 
     // Le décodage/parsing (surtout Excel) peut être coûteux sur un gros
@@ -29,18 +35,33 @@ class ImportService {
     if (extension == 'csv') {
       return compute(_parseCsv, utf8.decode(bytes, allowMalformed: true));
     }
-    throw const FormatException('Format non reconnu');
+    throw const FormatException("Format non reconnu. Utilisez un fichier .xlsx ou .csv.");
+  }
+
+  /// Partage un modèle de fichier CSV prêt à remplir, pour les utilisateurs
+  /// qui ne savent pas quel format donner à leur fichier d'import.
+  Future<void> shareTemplateFile() async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/modele_invyra_invites.csv');
+    await file.writeAsString(_templateCsvContent, flush: true);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'text/csv')],
+        text: "Modèle de liste d'invités pour Invyra — remplissez-le puis réimportez-le dans l'app.",
+        subject: "Modèle d'import d'invités Invyra",
+      ),
+    );
   }
 }
 
 List<Map<String, dynamic>> _parseExcel(List<int> bytes) {
   final workbook = Excel.decodeBytes(bytes);
   if (workbook.tables.isEmpty) {
-    throw const FormatException('Format non reconnu');
+    throw const FormatException("Ce fichier Excel ne contient aucune feuille de calcul.");
   }
   final rows = workbook.tables.values.first.rows;
   if (rows.isEmpty) {
-    throw const FormatException('Format non reconnu');
+    throw const FormatException('Ce fichier Excel est vide.');
   }
   final header = rows.first
       .map((cell) => cell?.value?.toString() ?? '')
@@ -64,7 +85,7 @@ List<Map<String, dynamic>> _parseCsv(String content) {
       .where((line) => line.trim().isNotEmpty)
       .toList();
   if (lines.isEmpty) {
-    throw const FormatException('Format non reconnu');
+    throw const FormatException('Ce fichier CSV est vide.');
   }
   final separator = lines.first.contains(';') ? ';' : ',';
   final header = _splitCsvLine(lines.first, separator);
@@ -91,7 +112,12 @@ Map<String, int> _buildColumnMapping(List<String> header) {
     }
   }
   if (!mapping.containsKey('full_name')) {
-    throw const FormatException('Format non reconnu');
+    throw const FormatException(
+      "Aucune colonne \"Nom\" trouvée dans ce fichier. "
+      "La première ligne doit contenir une colonne nommée \"Nom\" (ou \"Name\"), "
+      "et optionnellement \"Téléphone\" et \"Email\". "
+      "Téléchargez le modèle pour voir le format attendu.",
+    );
   }
   return mapping;
 }

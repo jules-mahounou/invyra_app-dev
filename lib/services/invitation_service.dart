@@ -91,6 +91,7 @@ class InvitationService {
             guest_id,
             channel,
             status,
+            public_token,
             sent_at,
             delivered_at,
             viewed_at,
@@ -103,6 +104,34 @@ class InvitationService {
           .eq('event_id', eventId)
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(response);
+    } on PostgrestException catch (e) {
+      throw Exception('Erreur base de données : ${e.message}');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception(
+        'Connexion impossible. Vérifiez votre connexion internet.',
+      );
+    }
+  }
+
+  /// Marque l'invitation d'un invité comme envoyée (ex: après un partage
+  /// WhatsApp réussi), sans écraser un statut déjà plus avancé (vue/confirmé/
+  /// décliné) — seul un "brouillon" peut passer à "envoyé" par cette méthode.
+  Future<void> markGuestInvitationSent({
+    required String eventId,
+    required String guestId,
+  }) async {
+    try {
+      await _assertEventOwnership(eventId);
+      await _client
+          .from('invitations')
+          .update({
+            'status': 'envoye',
+            'sent_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('event_id', eventId)
+          .eq('guest_id', guestId)
+          .eq('status', 'brouillon');
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {

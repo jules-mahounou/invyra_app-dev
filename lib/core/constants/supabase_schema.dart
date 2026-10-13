@@ -124,3 +124,17 @@ String? normalizeOptionalText(String? value) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
 }
+
+final RegExp _simpleEmailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+bool isValidEmail(String value) => _simpleEmailPattern.hasMatch(value.trim());
+
+/// Comme [normalizeOptionalText], mais rejette (retourne `null`) toute valeur
+/// qui ne ressemble pas à un email — filet de sécurité pour que tout chemin
+/// d'ajout d'invité (saisie manuelle, CSV, imports futurs) ne puisse jamais
+/// enregistrer un email mal formé, qu'un service d'envoi externe refuserait.
+String? normalizeOptionalEmail(String? value) {
+  final normalized = normalizeOptionalText(value);
+  if (normalized == null) return null;
+  return isValidEmail(normalized) ? normalized : null;
+}

@@ -12,10 +12,10 @@ import '../core/widgets/app_loader.dart';
 import '../models/event_model.dart';
 import '../services/event_service.dart';
 import 'create_event/steps/step2_template.dart';
+import 'guest_manager_screen.dart';
 import 'scan_screen.dart';
 import 'template_customization_screen.dart';
 import 'web_preview_screen.dart';
-import '../widgets/guest_manager_widget.dart';
 import '../widgets/edit_event_sheet.dart';
 
 class EventDetailScreen extends StatefulWidget {
@@ -30,8 +30,6 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   final _eventService = EventService();
   final _profileService = UserProfileService();
-  
-  final GlobalKey<GuestManagerWidgetState> _guestManagerKey = GlobalKey<GuestManagerWidgetState>();
 
   EventModel? _event;
   bool _isLoading = true;
@@ -102,6 +100,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         content: Text(message, style: const TextStyle(color: AppColors.blancCasse)),
         backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _openGuestManager(String eventName) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GuestManagerScreen(
+          eventId: widget.eventId,
+          eventName: eventName,
+          onChanged: _loadEvent,
+        ),
       ),
     );
   }
@@ -271,7 +281,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (_isLoading) {
       return const Material(
         color: AppColors.blancCasse,
-        child: const AppLoaderScreen(),
+        child: AppLoaderScreen(),
       );
     }
 
@@ -360,18 +370,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 ),
                                 
                                 const SizedBox(height: AppSpacing.lg),
-                                Text(
-                                  'Invités',
-                                  style: AppTypography.textTheme.displaySmall?.copyWith(
-                                    color: AppColors.noirDoux,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                GuestManagerWidget(
-                                  key: _guestManagerKey,
-                                  eventId: widget.eventId,
-                                  onChanged: _loadEvent,
+                                _GuestsSummaryCard(
+                                  guestCount: event.guestsCount,
+                                  onTap: () => _openGuestManager(event.name),
                                 ),
                               ],
                             ),
@@ -386,7 +387,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           },
         ),
       ),
-      // DEUX BOUTONS EN BAS : générer les invitations + scanner
+      // DEUX BOUTONS EN BAS : scanner + gérer les invités (qui mène à la
+      // génération des billets, désormais sur l'écran dédié aux invités).
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
@@ -419,34 +421,74 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              // Bouton Générer les invitations (principal)
+              // Bouton Gérer les invités (principal)
               Expanded(
                 flex: 2,
                 child: _GradientActionButton(
-                  label: 'Générer les billets',
-                  icon: Icons.send_rounded,
-                  onPressed: () async {
-                    try {
-                      await _guestManagerKey.currentState?.triggerSendInvitations();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Billets générés avec succès ✓'),
-                            backgroundColor: AppColors.success,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        _showError(e.toString().replaceFirst('Exception: ', ''));
-                      }
-                    }
-                  },
+                  label: 'Gérer les invités',
+                  icon: Icons.people_alt_rounded,
+                  onPressed: () => _openGuestManager(event.name),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestsSummaryCard extends StatelessWidget {
+  final int guestCount;
+  final VoidCallback onTap;
+
+  const _GuestsSummaryCard({required this.guestCount, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppDecorations.cardDecoration.copyWith(
+          color: AppColors.blancCasse,
+          border: Border.all(color: AppColors.violetRoyal.withValues(alpha: 0.10)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.violetRoyal.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: const Icon(Icons.people_alt_rounded, color: AppColors.violetRoyal),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Invités',
+                    style: AppTypography.textTheme.titleMedium?.copyWith(
+                      color: AppColors.noirDoux,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    guestCount == 0 ? 'Aucun invité ajouté' : '$guestCount invité(s)',
+                    style: AppTypography.textTheme.bodySmall?.copyWith(
+                      color: AppColors.noirDoux.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.noirDoux),
+          ],
         ),
       ),
     );

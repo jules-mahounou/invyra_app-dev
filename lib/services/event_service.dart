@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/constants/supabase_schema.dart';
+import '../core/services/device_link_service.dart';
 
 class EventService {
   final _client = Supabase.instance.client;
@@ -27,12 +28,33 @@ class EventService {
   Future<Map<String, dynamic>> checkEventCreationQuota() async {
     try {
       final userId = _client.auth.currentUser!.id;
-      final userResponse = await _client
+      Future<Map<String, dynamic>> readUser() => _client
           .from('users')
-          .select('account_type')
+          .select('account_type, device_id')
           .eq('id', userId)
           .single();
+
+      var userResponse = await readUser();
       final accountType = userResponse['account_type'] as String;
+      // La liaison appareil/compte tourne en arrière-plan après la connexion :
+      // elle peut ne pas être encore terminée. On la tente avant de conclure à un conflit.
+      if (accountType == 'gratuit' && userResponse['device_id'] == null) {
+        await linkDeviceToCurrentUser();
+        userResponse = await readUser();
+      }
+      final deviceId = userResponse['device_id'] as String?;
+
+      // Un compte gratuit dont l'appareil est déjà lié à un AUTRE compte
+      // gratuit n'a droit à aucun quota (anti-abus multi-compte).
+      if (accountType == 'gratuit' && deviceId == null) {
+        return {
+          'canCreate': false,
+          'currentCount': 0,
+          'maxAllowed': 0,
+          'accountType': accountType,
+          'reason': 'device_conflict',
+        };
+      }
 
       final planRow = await _client
           .from('subscription_plans')
@@ -45,10 +67,13 @@ class EventService {
       // Secours si le plan gratuit n'est pas configuré en base.
       final effectiveMax = maxAllowed ?? (accountType == 'gratuit' ? 3 : null);
 
+      // Même règle que le trigger `enforce_event_creation_limits` :
+      // un événement clôturé libère sa place dans le quota.
       final events = await _client
           .from('events')
           .select('id')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .neq('status', 'cloture');
       final currentCount = (events as List).length;
 
       return {
@@ -56,6 +81,7 @@ class EventService {
         'currentCount': currentCount,
         'maxAllowed': effectiveMax,
         'accountType': accountType,
+        'reason': 'quota_reached',
       };
     } on PostgrestException catch (e) {
       throw Exception('Erreur base de données : ${e.message}');

@@ -76,6 +76,28 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
     }
   }
 
+  /// Téléverse une photo choisie et retourne son URL publique, ou `null` en
+  /// cas d'échec (affiche alors un message d'erreur).
+  Future<String?> _uploadPickedImage(XFile picked) async {
+    try {
+      final bytes = await picked.readAsBytes();
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final path =
+          '$userId/events/${widget.eventId}/template/${DateTime.now().microsecondsSinceEpoch}_${picked.name}';
+      await Supabase.instance.client.storage
+          .from('event-logos')
+          .uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
+      return Supabase.instance.client.storage.from('event-logos').getPublicUrl(path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.error),
+        );
+      }
+      return null;
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _isSaving = true);
     try {
@@ -433,7 +455,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Appuyez sur une photo pour la remplacer. Max $max photos.',
+            'Appuyez sur une photo pour la remplacer, ou sur "Ajouter" pour en sélectionner plusieurs à la fois. Max $max photos.',
             style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.noirDoux.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -453,38 +475,30 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
               if (i == images.length && images.length < max) {
                 return GestureDetector(
                   onTap: () async {
+                    final remainingSlots = max - images.length;
                     final picker = ImagePicker();
-                    final picked = await picker.pickImage(
-                      source: ImageSource.gallery,
+                    final picked = await picker.pickMultiImage(
                       maxWidth: 1200,
                       imageQuality: 85,
+                      limit: remainingSlots,
                     );
-                    if (picked == null || !mounted) return;
+                    if (picked.isEmpty || !mounted) return;
+
                     setState(() => _isSaving = true);
-                    try {
-                      final bytes = await picked.readAsBytes();
-                      final userId = Supabase.instance.client.auth.currentUser!.id;
-                      final path = '$userId/events/${widget.eventId}/template/${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
-                      await Supabase.instance.client.storage
-                          .from('event-logos')
-                          .uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
-                      final url = Supabase.instance.client.storage
-                          .from('event-logos')
-                          .getPublicUrl(path);
-                      if (mounted) {
-                        setState(() {
-                          final newList = List<String>.from(images)..add(url);
-                          _values[key] = newList;
-                          _isSaving = false;
-                        });
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        setState(() => _isSaving = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.error),
-                        );
-                      }
+                    // On ne garde que le nombre de photos qu'il reste de la
+                    // place d'accueillir, au cas où le sélecteur natif
+                    // ignorerait la limite demandée.
+                    final toUpload = picked.take(remainingSlots);
+                    final uploadedUrls = <String>[];
+                    for (final file in toUpload) {
+                      final url = await _uploadPickedImage(file);
+                      if (url != null) uploadedUrls.add(url);
+                    }
+                    if (mounted) {
+                      setState(() {
+                        _values[key] = List<String>.from(images)..addAll(uploadedUrls);
+                        _isSaving = false;
+                      });
                     }
                   },
                   child: Container(
@@ -517,21 +531,17 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
                       final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
                       if (picked == null || !mounted) return;
                       setState(() => _isSaving = true);
-                      try {
-                        final bytes = await picked.readAsBytes();
-                        final userId = Supabase.instance.client.auth.currentUser!.id;
-                        final path = '$userId/events/${widget.eventId}/template/${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
-                        await Supabase.instance.client.storage.from('event-logos').uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
-                        final url = Supabase.instance.client.storage.from('event-logos').getPublicUrl(path);
-                        if (mounted) {
-                          setState(() {
+                      final url = await _uploadPickedImage(picked);
+                      if (mounted) {
+                        setState(() {
+                          if (url != null) {
                             final newList = List<String>.from(images);
                             newList[i] = url;
                             _values[key] = newList;
-                            _isSaving = false;
-                          });
-                        }
-                      } catch (_) { if (mounted) setState(() => _isSaving = false); }
+                          }
+                          _isSaving = false;
+                        });
+                      }
                     },
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -562,7 +572,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
                               ),
                             );
                           },
-                          errorBuilder: (_, __, ___) => const Center(
+                          errorBuilder: (_, _, _) => const Center(
                             child: Icon(Icons.broken_image_rounded, color: AppColors.noirDoux, size: 24),
                           ),
                         ),
@@ -647,7 +657,7 @@ class _TemplateCustomizationScreenState extends State<TemplateCustomizationScree
                       final current = items[i]['time'] as String? ?? '';
                       final parts = current.split(':');
                       final initial = TimeOfDay(
-                        hour: parts.length > 0 ? int.tryParse(parts[0]) ?? 0 : 0,
+                        hour: parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0,
                         minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
                       );
                       final picked = await showTimePicker(
@@ -884,7 +894,7 @@ class _FieldCard extends StatelessWidget {
               Expanded(
                 child: Text(label, style: AppTypography.textTheme.bodySmall?.copyWith(color: AppColors.violetRoyal, fontWeight: FontWeight.w700)),
               ),
-              if (trailing != null) trailing!,
+              ?trailing,
             ],
           ),
           if (child is! SizedBox || (child as SizedBox).height != 0) ...[

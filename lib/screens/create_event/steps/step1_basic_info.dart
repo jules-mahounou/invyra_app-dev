@@ -121,13 +121,16 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
     });
   }
 
-  Future<void> _showQuotaDialog() async {
+  Future<void> _showQuotaDialog({String? reason}) async {
+    final isDeviceConflict = reason == 'device_conflict';
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Limite atteinte'),
-        content: const Text(
-          'Vous avez atteint le nombre maximum d’événements pour votre offre actuelle.',
+        title: Text(isDeviceConflict ? 'Aucun quota disponible' : 'Limite atteinte'),
+        content: Text(
+          isDeviceConflict
+              ? 'Un compte gratuit existe déjà sur cet appareil. Connectez-vous avec ce compte, ou passez à une offre payante pour en créer un nouveau.'
+              : 'Vous avez atteint le nombre maximum d’événements pour votre offre actuelle.',
         ),
         actions: [
           TextButton(
@@ -232,7 +235,7 @@ class _Step1BasicInfoState extends State<Step1BasicInfo> {
       if (!(quota['canCreate'] as bool)) {
         if (!mounted) return;
         setState(() => _isLoading = false);
-        await _showQuotaDialog();
+        await _showQuotaDialog(reason: quota['reason'] as String?);
         return;
       }
 

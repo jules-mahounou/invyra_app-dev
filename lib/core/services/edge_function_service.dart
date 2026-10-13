@@ -114,6 +114,44 @@ class EdgeFunctionService {
     }
   }
 
+  /// Résultat de l'envoi groupé d'emails d'invitation.
+  Future<({int sent, int failed, int skippedInvalid})> sendInvitationEmails({
+    required String eventId,
+    List<String>? guestIds,
+  }) async {
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'send-invitation-emails',
+        body: {
+          'event_id': eventId,
+          'guest_ids': guestIds,
+        },
+      );
+
+      final payload = response.data;
+      if (payload is! Map) {
+        return (sent: 0, failed: 0, skippedInvalid: 0);
+      }
+      final safePayload = Map<String, dynamic>.from(payload);
+      return (
+        sent: (safePayload['sent'] as num?)?.toInt() ?? 0,
+        failed: (safePayload['failed'] as num?)?.toInt() ?? 0,
+        skippedInvalid: (safePayload['skippedInvalid'] as num?)?.toInt() ?? 0,
+      );
+    } on FunctionException catch (error) {
+      // L'Edge Function renvoie un message déjà compréhensible dans le corps
+      // JSON ({error: "..."}) même sur un statut d'échec — on le récupère
+      // plutôt que d'exposer la trace technique brute.
+      final details = error.details;
+      final friendlyMessage = details is Map ? details['error']?.toString() : null;
+      throw Exception(
+        friendlyMessage ?? "L'envoi des emails a échoué. Réessayez plus tard.",
+      );
+    } catch (error) {
+      throw Exception("L'envoi des emails a échoué. Vérifiez votre connexion et réessayez.");
+    }
+  }
+
   Future<QrValidationResult> validateQr({
     required String qrCode,
     required String eventId,

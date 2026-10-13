@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/auth/auth_error_message.dart';
 import '../core/config/supabase_config.dart';
 import '../core/constants/app_assets.dart';
+import '../core/services/device_link_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
@@ -26,6 +27,15 @@ class _SignupScreenState extends State<SignupScreen> {
   bool obscureConfirm = true;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _deviceHasFreeAccount = false;
+
+  @override
+  void initState() {
+    super.initState();
+    deviceHasFreeAccount().then((value) {
+      if (mounted && value) setState(() => _deviceHasFreeAccount = true);
+    });
+  }
 
   @override
   void dispose() {
@@ -199,6 +209,33 @@ class _SignupScreenState extends State<SignupScreen> {
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
+                    if (_deviceHasFreeAccount) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.orAfricain.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline, size: 20, color: AppColors.orAfricain),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Un compte gratuit existe déjà sur cet appareil. Un nouveau compte n’aura pas d’événements gratuits : connectez-vous plutôt avec votre compte existant, ou continuez pour souscrire une offre payante.',
+                                style: AppTypography.textTheme.bodySmall?.copyWith(
+                                  color: AppColors.noirDoux,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
                     Text('Nom d’utilisateur', style: AppTypography.textTheme.bodyMedium),
                     const SizedBox(height: 6),
                     _buildTextField(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -6,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/auth/auth_gate.dart';
 import 'core/auth/auth_session.dart';
 import 'core/config/supabase_config.dart';
+import 'core/services/device_link_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/onboarding_screen.dart';
@@ -38,8 +41,15 @@ Future<void> main() async {
 
   Supabase.instance.client.auth.onAuthStateChange.listen((data) {
     switch (data.event) {
+      case AuthChangeEvent.initialSession:
+        // Session restaurée au lancement : pas de `signedIn` dans ce cas,
+        // on rattache quand même l'appareil (comptes existants avant l'anti-abus).
+        if (data.session != null) {
+          unawaited(linkDeviceToCurrentUser());
+        }
       case AuthChangeEvent.signedIn:
         if (data.session != null) {
+          unawaited(linkDeviceToCurrentUser());
           _navigateTo('/home');
         }
       case AuthChangeEvent.signedOut:

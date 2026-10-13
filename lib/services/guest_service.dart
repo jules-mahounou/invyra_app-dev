@@ -39,7 +39,7 @@ class GuestService {
               'event_id': eventId,
               'full_name': fullName.trim(),
               'phone': normalizeOptionalText(phone),
-              'email': normalizeOptionalText(email),
+              'email': normalizeOptionalEmail(email),
               'import_source': importSource.isEmpty ? kDefaultGuestImportSource : importSource,
             }),
           )
@@ -54,6 +54,76 @@ class GuestService {
           'Un invité avec ce $field est déjà dans la liste. '
           'Chaque invité doit avoir un $field unique.',
         );
+      }
+      throw Exception('Erreur base de données : ${e.message}');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
+    }
+  }
+
+  /// Ajoute plusieurs invités en une seule requête (import contacts, liste
+  /// collée, CSV/Excel) — bien plus rapide qu'un `addGuest` par invité.
+  Future<List<Map<String, dynamic>>> addGuestsBulk({
+    required String eventId,
+    required List<({String fullName, String? phone, String? email})> guests,
+    String importSource = 'manual',
+  }) async {
+    if (guests.isEmpty) return [];
+    try {
+      await _assertEventOwnership(eventId);
+      final rows = guests
+          .map((g) => supabaseRow({
+                'event_id': eventId,
+                'full_name': g.fullName.trim(),
+                'phone': normalizeOptionalText(g.phone),
+                'email': normalizeOptionalEmail(g.email),
+                'import_source': importSource.isEmpty ? kDefaultGuestImportSource : importSource,
+              }))
+          .toList();
+      final response = await _client.from('guests').insert(rows).select();
+      return List<Map<String, dynamic>>.from(response);
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw Exception(
+          "Au moins un invité de cette liste a un numéro ou un email déjà utilisé "
+          "(soit dans la liste elle-même, soit déjà présent dans l'événement). "
+          "Retirez les doublons et réessayez.",
+        );
+      }
+      throw Exception('Erreur base de données : ${e.message}');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connexion impossible. Vérifiez votre connexion internet.');
+    }
+  }
+
+  /// Corrige un invité déjà ajouté (faute de frappe sur le nom, le numéro...).
+  Future<Map<String, dynamic>> updateGuest({
+    required String guestId,
+    required String eventId,
+    required String fullName,
+    String? phone,
+    String? email,
+  }) async {
+    try {
+      await _assertEventOwnership(eventId);
+      final response = await _client
+          .from('guests')
+          .update({
+            'full_name': fullName.trim(),
+            'phone': normalizeOptionalText(phone),
+            'email': normalizeOptionalEmail(email),
+          })
+          .eq('id', guestId)
+          .eq('event_id', eventId)
+          .select()
+          .single();
+      return Map<String, dynamic>.from(response);
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        final field = e.message.contains('phone') ? 'numéro de téléphone' : 'email';
+        throw Exception('Un autre invité utilise déjà ce $field.');
       }
       throw Exception('Erreur base de données : ${e.message}');
     } catch (e) {
@@ -101,7 +171,7 @@ class GuestService {
     required List<String> guestIds,
   }) async {
     try {
-      
+
       return await _edgeService.sendInvitations(
         eventId: eventId,
         guestIds: guestIds,
@@ -109,6 +179,22 @@ class GuestService {
       );
     } catch (e) {
       throw Exception(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  /// Envoie automatiquement, côté serveur, un email d'invitation à tous les
+  /// invités de l'événement qui ont une adresse email renseignée — contrairement
+  /// à WhatsApp, aucune action manuelle n'est nécessaire après cet appel.
+  Future<({int sent, int failed, int skippedInvalid})> sendInvitationEmails({
+    required String eventId,
+  }) async {
+    try {
+      return await _edgeService.sendInvitationEmails(eventId: eventId);
+    } catch (e) {
+      // EdgeFunctionService traduit déjà les erreurs techniques en messages
+      // compréhensibles — on les relaie tels quels plutôt que de les masquer.
+      if (e is Exception) rethrow;
+      throw Exception("L'envoi des emails a échoué. Vérifiez votre connexion et réessayez.");
     }
   }
 }
