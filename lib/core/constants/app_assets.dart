@@ -13,7 +13,11 @@ class AppAssets {
   // Logos
   static const String logoFull = 'assets/images/logos/logo_.png';
   static const String logoMark = 'assets/images/logos/logo_.png';
-  static const String logoWhite = 'assets/images/logos/logo_.png';
+  /// Logo complet (icône + « INVYRA » + slogan) en couleurs, pour fonds clairs.
+  static const String logoColor = 'assets/images/logos/logo_full_color.png';
+
+  /// Logo complet (icône + « INVYRA » + slogan) avec texte blanc, pour fonds sombres.
+  static const String logoWhite = 'assets/images/logos/logo_full_white.png';
   static const String googleLogo = 'assets/images/logos/40px-Google__G__logo.svg.png';
 
   // Templates aperçus

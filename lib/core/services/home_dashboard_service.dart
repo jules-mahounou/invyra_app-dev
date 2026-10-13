@@ -8,6 +8,11 @@ class HomeDashboardService {
 
   final SupabaseClient _client;
 
+  // L'enum `invitation_status` en base contient d'anciens et de nouveaux
+  // libellés (ex. `confirmee` et `confirme`) : on accepte les deux.
+  static const _sentStatuses = ['envoyee', 'livree', 'vue', 'confirmee', 'confirme', 'decline'];
+  static const _confirmedStatuses = ['confirmee', 'confirme'];
+
   Future<HomeDashboardData> fetch() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) {
@@ -22,15 +27,34 @@ class HomeDashboardService {
 
     final accountType = userRow['account_type'] as String;
 
-    final planRow = await _client
+    final plansResponse = await _client
         .from('subscription_plans')
-        .select('code, max_events')
-        .eq('code', accountType)
-        .eq('is_active', true)
-        .maybeSingle();
+        .select('code, name, price, max_events')
+        .eq('is_active', true);
+    final plans = (plansResponse as List).cast<Map<String, dynamic>>();
+    Map<String, dynamic>? planFor(String code) {
+      for (final plan in plans) {
+        if (plan['code'] == code) return plan;
+      }
+      return null;
+    }
 
+    final planRow = planFor(accountType);
     final planCode = planRow?['code'] as String? ?? accountType;
     final maxEvents = planRow?['max_events'] as int?;
+    final essentielPrice = planFor('essentiel')?['price'] as num?;
+
+    final packsResponse = await _client
+        .from('flex_packs')
+        .select('guest_limit, price_fcfa')
+        .order('guest_limit');
+    final flexPacks = (packsResponse as List)
+        .cast<Map<String, dynamic>>()
+        .map((p) => HomeFlexPack(
+              guestLimit: (p['guest_limit'] as num).toInt(),
+              priceFcfa: (p['price_fcfa'] as num).toInt(),
+            ))
+        .toList();
 
     final eventsResponse = await _client
         .from('events')
@@ -49,7 +73,7 @@ class HomeDashboardService {
           .from('invitations')
           .select('id')
           .inFilter('event_id', eventIds)
-          .inFilter('status', ['envoyee', 'livree', 'vue', 'confirmee']);
+          .inFilter('status', _sentStatuses);
       invitesDispatched = (invitationsResponse as List).length;
     }
 
@@ -68,7 +92,7 @@ class HomeDashboardService {
           .from('invitations')
           .select('id')
           .inFilter('event_id', eventIds)
-          .eq('status', 'confirmee');
+          .inFilter('status', _confirmedStatuses);
       guestsConfirmed = (confirmedResponse as List).length;
     }
 
@@ -78,7 +102,9 @@ class HomeDashboardService {
       }
     }
 
-    final recentEvents = events.take(3).map(RecentEvent.fromJson).toList();
+    final recentEvents = events.take(6).map(RecentEvent.fromJson).toList();
+    // Même règle que le quota serveur : un événement clôturé libère sa place.
+    final quotaUsed = events.where((event) => event['status'] != 'cloture').length;
 
     return HomeDashboardData(
       userName: userRow['full_name'] as String? ?? '',
@@ -89,7 +115,10 @@ class HomeDashboardService {
       activeEvents: activeEvents,
       guestsConfirmed: guestsConfirmed,
       invitesDispatched: invitesDispatched,
-      quotaUsed: events.length,
+      quotaUsed: quotaUsed,
+      planName: planRow?['name'] as String?,
+      essentielPriceFcfa: essentielPrice?.toInt(),
+      flexPacks: flexPacks,
       recentEvents: recentEvents,
     );
   }

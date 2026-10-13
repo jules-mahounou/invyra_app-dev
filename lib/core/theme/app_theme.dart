@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_decorations.dart';
 import 'app_spacing.dart';
+import 'app_system_ui.dart';
 import 'app_typography.dart';
 
 class AppTheme {
@@ -11,6 +12,8 @@ class AppTheme {
     final base = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      // Police par défaut de tout texte non stylé (boutons, champs, menus…).
+      fontFamily: AppTypography.fontFamily,
       scaffoldBackgroundColor: AppColors.beigeCremeAlt,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.violetRoyal,
@@ -20,6 +23,7 @@ class AppTheme {
       ),
       textTheme: AppTypography.textTheme,
       appBarTheme: AppBarTheme(
+        systemOverlayStyle: AppSystemUi.standard,
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.noirDoux,
         elevation: 0,

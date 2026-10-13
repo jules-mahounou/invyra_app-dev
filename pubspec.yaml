@@ -81,6 +81,19 @@ flutter:
     - assets/icons/custom/
 
   fonts:
+    # Police de toute l'interface (voir AppTypography).
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope/Manrope-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope/Manrope-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Manrope/Manrope-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Manrope/Manrope-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Manrope/Manrope-ExtraBold.ttf
+          weight: 800
     - family: Poppins
       fonts:
         - asset: assets/fonts/Poppins/Poppins-Light.ttf

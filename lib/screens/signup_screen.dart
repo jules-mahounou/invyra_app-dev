@@ -4,10 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/auth/auth_error_message.dart';
 import '../core/config/supabase_config.dart';
-import '../core/constants/app_assets.dart';
+import '../core/widgets/auth_layout.dart';
 import '../core/services/device_link_service.dart';
 import '../core/theme/app_colors.dart';
-import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -160,289 +159,108 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+
+  void _clearError(String _) {
+    if (_errorMessage != null) {
+      setState(() => _errorMessage = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
-    return Scaffold(
-      backgroundColor: AppColors.blancCasse,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: const _FullScreenPainter(waveRatio: 0.30),
-            ),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: size.height * 0.18),
-                    Center(
-                      child: Image.asset(
-                        AppAssets.logoFull,
-                        height: 52,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Créer un compte',
-                      style: AppTypography.textTheme.displayMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.noirDoux,
-                      ),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.only(top: 4, bottom: 18),
-                      height: 3,
-                      width: 58,
-                      decoration: BoxDecoration(
-                        color: AppColors.orAfricain,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    if (_deviceHasFreeAccount) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.orAfricain.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.info_outline, size: 20, color: AppColors.orAfricain),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Un compte gratuit existe déjà sur cet appareil. Un nouveau compte n’aura pas d’événements gratuits : connectez-vous plutôt avec votre compte existant, ou continuez pour souscrire une offre payante.',
-                                style: AppTypography.textTheme.bodySmall?.copyWith(
-                                  color: AppColors.noirDoux,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                    ],
-                    Text('Nom d’utilisateur', style: AppTypography.textTheme.bodyMedium),
-                    const SizedBox(height: 6),
-                    _buildTextField(
-                      controller: _usernameController,
-                      hint: 'Choisissez un nom d’utilisateur',
-                      icon: Icons.person_outline,
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Email', style: AppTypography.textTheme.bodyMedium),
-                    const SizedBox(height: 6),
-                    _buildTextField(
-                      controller: _emailController,
-                      hint: 'you@example.com',
-                      icon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Mot de passe', style: AppTypography.textTheme.bodyMedium),
-                    const SizedBox(height: 6),
-                    _buildTextField(
-                      controller: _passwordController,
-                      hint: 'Créez un mot de passe',
-                      icon: Icons.lock_outline,
-                      isPassword: true,
-                      obscure: obscurePassword,
-                      onToggle: () => setState(() => obscurePassword = !obscurePassword),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Confirmer le mot de passe', style: AppTypography.textTheme.bodyMedium),
-                    const SizedBox(height: 6),
-                    _buildTextField(
-                      controller: _confirmPasswordController,
-                      hint: 'Répétez votre mot de passe',
-                      icon: Icons.lock_outline,
-                      isPassword: true,
-                      obscure: obscureConfirm,
-                      onToggle: () => setState(() => obscureConfirm = !obscureConfirm),
-                    ),
-                    if (_errorMessage != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _errorMessage!,
-                        style: AppTypography.textTheme.bodySmall?.copyWith(
-                          color: AppColors.error,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    _buildPrimaryButton(),
-                    const SizedBox(height: 16),
-                    _buildGoogleButton(),
-                    const SizedBox(height: 18),
-                    Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Vous avez déjà un compte ?', style: AppTypography.textTheme.bodySmall),
-                          TextButton(
-                            onPressed: _isLoading
-                                ? null
-                                : () => Navigator.pushReplacementNamed(context, '/login'),
-                            style: TextButton.styleFrom(foregroundColor: AppColors.orAfricain),
-                            child: const Text('Se connecter'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+    return AuthLayout(
+      title: 'Inscription',
+      headerFraction: 0.32,
+      footer: AuthFooterLink(
+        text: 'Vous avez déjà un compte ?',
+        linkLabel: 'Se connecter',
+        onTap: _isLoading ? null : () => Navigator.pushReplacementNamed(context, '/login'),
       ),
-    );
-  }
-
-  Widget _buildPrimaryButton() {
-    return GestureDetector(
-      onTap: _isLoading ? null : _signUpWithEmail,
-      child: Opacity(
-        opacity: _isLoading ? 0.6 : 1,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.violetRoyal,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          alignment: Alignment.center,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.blancCasse,
+      children: [
+        if (_deviceHasFreeAccount) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.orAfricain.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, size: 20, color: AppColors.orAfricain),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Un compte gratuit existe déjà sur cet appareil. Un nouveau compte n’aura pas d’événements gratuits : connectez-vous plutôt avec votre compte existant, ou continuez pour souscrire une offre payante.',
+                    style: AppTypography.textTheme.bodySmall?.copyWith(
+                      color: AppColors.noirDoux,
+                      height: 1.4,
+                    ),
                   ),
-                )
-              : const Text(
-                  'Créer un compte',
-                  style: TextStyle(color: AppColors.blancCasse, fontWeight: FontWeight.w600, fontSize: 16),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        AuthTextField(
+          label: 'Nom d’utilisateur',
+          controller: _usernameController,
+          hint: 'Choisissez un nom d’utilisateur',
+          icon: Icons.person_outline_rounded,
+          autofillHints: const [AutofillHints.username],
+          enabled: !_isLoading,
+          onChanged: _clearError,
         ),
-      ),
+        const SizedBox(height: 16),
+        AuthTextField(
+          label: 'Email',
+          controller: _emailController,
+          hint: 'vous@exemple.com',
+          icon: Icons.mail_outline_rounded,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          enabled: !_isLoading,
+          onChanged: _clearError,
+        ),
+        const SizedBox(height: 16),
+        AuthTextField(
+          label: 'Mot de passe',
+          controller: _passwordController,
+          hint: 'Au moins 6 caractères',
+          icon: Icons.lock_outline_rounded,
+          isPassword: true,
+          obscure: obscurePassword,
+          onToggleObscure: () => setState(() => obscurePassword = !obscurePassword),
+          autofillHints: const [AutofillHints.newPassword],
+          enabled: !_isLoading,
+          onChanged: _clearError,
+        ),
+        const SizedBox(height: 16),
+        AuthTextField(
+          label: 'Confirmer le mot de passe',
+          controller: _confirmPasswordController,
+          hint: 'Répétez votre mot de passe',
+          icon: Icons.lock_outline_rounded,
+          isPassword: true,
+          obscure: obscureConfirm,
+          onToggleObscure: () => setState(() => obscureConfirm = !obscureConfirm),
+          enabled: !_isLoading,
+          onChanged: _clearError,
+        ),
+        const SizedBox(height: 22),
+        if (_errorMessage != null) ...[
+          AuthErrorText(_errorMessage!),
+          const SizedBox(height: 16),
+        ],
+        AuthActionsRow(
+          label: 'Créer mon compte',
+          loading: _isLoading,
+          onPressed: _signUpWithEmail,
+          onGoogle: _isLoading ? null : _signInWithGoogle,
+        ),
+      ],
     );
   }
-
-  Widget _buildGoogleButton() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.blancCasse,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.noirDoux.withValues(alpha: 0.12)),
-      ),
-      child: TextButton.icon(
-        onPressed: _isLoading ? null : _signInWithGoogle,
-        icon: Image.asset(
-          AppAssets.googleLogo,
-          width: 18,
-          height: 18,
-        ),
-        label: const Text('Continuer avec Google'),
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.noirDoux,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    bool isPassword = false,
-    bool obscure = false,
-    VoidCallback? onToggle,
-    TextInputType? keyboardType,
-  }) {
-    return TextField(
-      controller: controller,
-      enabled: !_isLoading,
-      obscureText: isPassword ? obscure : false,
-      keyboardType: keyboardType,
-      onChanged: (_) {
-        if (_errorMessage != null) {
-          setState(() => _errorMessage = null);
-        }
-      },
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, size: 20, color: AppColors.noirDoux.withValues(alpha: 0.55)),
-        hintText: hint,
-        hintStyle: TextStyle(color: AppColors.noirDoux.withValues(alpha: 0.45), fontSize: 14),
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: AppColors.noirDoux.withValues(alpha: 0.12)),
-        ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: AppColors.orAfricain, width: 2),
-        ),
-        suffixIcon: isPassword
-            ? IconButton(
-                icon: Icon(
-                  obscure ? Icons.visibility_off : Icons.visibility,
-                  size: 20,
-                  color: AppColors.noirDoux.withValues(alpha: 0.55),
-                ),
-                onPressed: onToggle,
-              )
-            : null,
-      ),
-    );
-  }
-}
-
-class _FullScreenPainter extends CustomPainter {
-  const _FullScreenPainter({required this.waveRatio});
-  final double waveRatio;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()
-        ..shader = const LinearGradient(
-          colors: [AppColors.orAfricain, AppColors.violetRoyalAlt],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
-    );
-
-    final waveY = size.height * waveRatio;
-    final path = Path()
-      ..moveTo(0, waveY + 18)
-      ..cubicTo(size.width * 0.05, waveY - 60, size.width * 0.35, waveY - 35, size.width * 0.50, waveY + 70)
-      ..cubicTo(size.width * 0.72, waveY + 130, size.width * 1.0, waveY + 70, size.width, waveY)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-
-    canvas.drawPath(path, Paint()..color = AppColors.blancCasse);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FullScreenPainter old) => old.waveRatio != waveRatio;
 }

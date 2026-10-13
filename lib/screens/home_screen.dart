@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../core/auth/auth_gate.dart';
 import '../core/constants/app_assets.dart';
-import '../core/constants/app_constants.dart';
 import '../core/models/home_dashboard_data.dart';
 import '../core/models/recent_event.dart';
 import '../core/services/home_dashboard_service.dart';
@@ -11,17 +14,21 @@ import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/utils/date_utils.dart';
 import '../core/widgets/app_loader.dart';
-import '../widgets/event_thumbnail.dart';
+import '../core/widgets/auth_layout.dart';
 import 'event_detail_screen.dart';
 
 class HomeTabContent extends StatefulWidget {
   final VoidCallback? onSeeAllEvents;
+  final VoidCallback? onCreateEvent;
+  final VoidCallback? onProfileTap;
   final int unreadCount;
   final VoidCallback? onNotificationsTap;
 
   const HomeTabContent({
     super.key,
     this.onSeeAllEvents,
+    this.onCreateEvent,
+    this.onProfileTap,
     this.unreadCount = 0,
     this.onNotificationsTap,
   });
@@ -48,95 +55,47 @@ class HomeTabContentState extends State<HomeTabContent> {
 
   Future<void> _loadDashboard() async {
     setState(() {
-      _isLoading = true;
+      _isLoading = _data == null;
       _errorMessage = null;
     });
 
     try {
       final data = await _service.fetch();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _data = data;
         _isLoading = false;
       });
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Impossible de charger vos données.';
+        _errorMessage = 'Impossible de charger vos données. Vérifiez votre connexion internet.';
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const AppLoaderScreen();
+    if (_isLoading) return const AppLoaderScreen();
+
+    final data = _data;
+    if (data == null) {
+      return _HomeErrorView(
+        message: _errorMessage ?? 'Impossible de charger vos données.',
+        onRetry: _loadDashboard,
+      );
     }
 
-    if (_errorMessage != null) {
-      return _HomeErrorView(message: _errorMessage!, onRetry: _loadDashboard);
-    }
-
-    final data = _data!;
-
-    return Material(
-      color: AppColors.blancCasse,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
-          child: RefreshIndicator(
-            color: AppColors.violetRoyal,
-            onRefresh: _loadDashboard,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Header propre à la page ──
-                  _HomeHeader(
-                    userName: data.firstName,
-                    avatarUrl: data.avatarUrl,
-                    unreadCount: widget.unreadCount,
-                    onNotificationsTap: widget.onNotificationsTap,
-                    onSeeAllEvents: widget.onSeeAllEvents,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ── Carte Créer un événement ──
-                        _CreateEventCard(onTap: widget.onSeeAllEvents),
-                        const SizedBox(height: AppSpacing.lg),
-                        // ── Stats ──
-                        _StatsSection(
-                          activeEvents: data.activeEvents,
-                          invitesDispatched: data.invitesDispatched,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        // ── Événements récents ──
-                        _EventListSection(
-                          events: data.recentEvents,
-                          onSeeAll: widget.onSeeAllEvents,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        // ── Bouton abonnements ──
-                        _PlansButton(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+    return HomeView(
+      data: data,
+      unreadCount: widget.unreadCount,
+      onRefresh: _loadDashboard,
+      onNotificationsTap: widget.onNotificationsTap,
+      onSeeAllEvents: widget.onSeeAllEvents,
+      onCreateEvent: widget.onCreateEvent ?? widget.onSeeAllEvents,
+      onOpenEvent: (event) => pushProtectedRoute(context, EventDetailScreen(eventId: event.id)),
+      onProfileTap: widget.onProfileTap,
     );
   }
 }
@@ -145,92 +104,549 @@ class HomeScreen extends HomeTabContent {
   const HomeScreen({super.key});
 }
 
-// ─── Header propre à la page Home ────────────────────────────────────────────
-class _HomeHeader extends StatelessWidget {
-  final String userName;
-  final String? avatarUrl;
-  final int unreadCount;
-  final VoidCallback? onNotificationsTap;
-  final VoidCallback? onSeeAllEvents;
-
-  const _HomeHeader({
-    required this.userName,
-    required this.avatarUrl,
-    required this.unreadCount,
+/// Affichage de l'accueil, à partir de données déjà chargées.
+class HomeView extends StatelessWidget {
+  const HomeView({
+    super.key,
+    required this.data,
+    required this.onRefresh,
+    this.unreadCount = 0,
     this.onNotificationsTap,
     this.onSeeAllEvents,
+    this.onCreateEvent,
+    this.onOpenEvent,
+    this.onProfileTap,
   });
+
+  final HomeDashboardData data;
+  final int unreadCount;
+  final Future<void> Function() onRefresh;
+  final VoidCallback? onProfileTap;
+  final VoidCallback? onNotificationsTap;
+  final VoidCallback? onSeeAllEvents;
+  final VoidCallback? onCreateEvent;
+  final ValueChanged<RecentEvent>? onOpenEvent;
 
   @override
   Widget build(BuildContext context) {
-    final badgeLabel = unreadCount > 9 ? '9+' : '$unreadCount';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.beigeCremeAlt,
-              border: Border.all(color: AppColors.violetRoyal.withValues(alpha: 0.2), width: 2),
+    final width = MediaQuery.sizeOf(context).width;
+    // Sur tablette, le contenu reste dans une colonne confortable au centre.
+    final hPad = width > 720 ? (width - 640) / 2 : AppSpacing.lg;
+
+    return Material(
+      color: AppColors.blancCasse,
+      child: RefreshIndicator(
+        color: AppColors.violetRoyal,
+        onRefresh: onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(hPad, AppSpacing.md, hPad, 0),
+              child: _TopBar(
+                avatarUrl: data.avatarUrl,
+                unreadCount: unreadCount,
+                onNotificationsTap: onNotificationsTap,
+                onProfileTap: onProfileTap,
+              ),
             ),
-            child: ClipOval(
-              child: avatarUrl != null && avatarUrl!.isNotEmpty
-                  ? Image.network(avatarUrl!, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: AppColors.violetRoyal, size: 24))
-                  : const Icon(Icons.person_rounded, color: AppColors.violetRoyal, size: 24),
+            Padding(
+              padding: EdgeInsets.fromLTRB(hPad, AppSpacing.lg, hPad, 0),
+              child: _Greeting(firstName: data.firstName),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              child: _SectionTitle(
+                title: 'Vos événements',
+                actionLabel: data.recentEvents.isEmpty ? null : 'Voir tout',
+                onAction: onSeeAllEvents,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (data.recentEvents.isEmpty)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: hPad),
+                child: _FirstEventCard(onCreate: onCreateEvent),
+              )
+            else
+              _EventsCarousel(
+                events: data.recentEvents,
+                horizontalPadding: hPad,
+                onOpen: onOpenEvent,
+                onCreate: onCreateEvent,
+              ),
+            const SizedBox(height: AppSpacing.xl),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              child: _StatsCard(data: data),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              child: _PlanCard(data: data),
+            ),
+            if (data.accountType != 'essentiel' && data.flexPacks.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xl),
+              _PacksSection(packs: data.flexPacks, horizontalPadding: hPad),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Barre du haut : avatar + notifications ──────────────────────────────────
+
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.avatarUrl,
+    required this.unreadCount,
+    this.onNotificationsTap,
+    this.onProfileTap,
+  });
+
+  final String? avatarUrl;
+  final int unreadCount;
+  final VoidCallback? onNotificationsTap;
+  final VoidCallback? onProfileTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = avatarUrl;
+    return Row(
+      children: [
+        Flexible(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Image.asset(AppAssets.logoColor, height: 34, fit: BoxFit.contain),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        _RoundIconButton(
+          icon: Icons.notifications_none_rounded,
+          tooltip: 'Notifications',
+          onTap: onNotificationsTap,
+          badge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : '$unreadCount') : null,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Tooltip(
+          message: 'Mon profil',
+          child: GestureDetector(
+            onTap: onProfileTap,
+            child: Container(
+              width: 46,
+              height: 46,
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              child: ClipOval(
+                child: url != null && url.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, _, _) => const _AvatarFallback(),
+                      )
+                    : const _AvatarFallback(),
+              ),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          // Nom
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Bonjour,',
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.noirDoux.withValues(alpha: 0.6),
-                  ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AvatarFallback extends StatelessWidget {
+  const _AvatarFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppColors.violetRoyal.withValues(alpha: 0.10),
+      child: const Icon(Icons.person_rounded, color: AppColors.violetRoyal, size: 24),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({required this.icon, required this.tooltip, this.onTap, this.badge});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: Colors.white,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: Icon(icon, color: AppColors.noirDoux, size: 24),
+              ),
+            ),
+          ),
+          if (badge != null)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.orAfricain,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  border: Border.all(color: AppColors.blancCasse, width: 2),
                 ),
-                Text(
-                  userName.isNotEmpty ? userName.split(' ').first : 'Utilisateur',
-                  style: AppTypography.textTheme.displaySmall?.copyWith(
+                alignment: Alignment.center,
+                child: Text(
+                  badge!,
+                  style: AppTypography.textTheme.labelSmall?.copyWith(
                     color: AppColors.noirDoux,
                     fontWeight: FontWeight.w800,
+                    fontSize: 10,
                   ),
-                ),
-              ],
-            ),
-          ),
-          // Cloche notifications
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              IconButton(
-                onPressed: null,
-                icon: const Icon(Icons.notifications_rounded),
-                color: AppColors.violetRoyal,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.violetRoyal.withValues(alpha: 0.08),
-                  shape: const CircleBorder(),
                 ),
               ),
-              if (unreadCount > 0)
-                Positioned(
-                  right: 4, top: 4,
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: const BoxDecoration(color: AppColors.orAfricain, shape: BoxShape.circle),
-                    alignment: Alignment.center,
-                    child: Text(badgeLabel,
-                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Salutation ──────────────────────────────────────────────────────────────
+
+class _Greeting extends StatelessWidget {
+  const _Greeting({required this.firstName});
+
+  final String firstName;
+
+  @override
+  Widget build(BuildContext context) {
+    final hour = DateTime.now().hour;
+    final salutation = hour >= 5 && hour < 18 ? 'Bonjour' : 'Bonsoir';
+    final muted = AppColors.noirDoux.withValues(alpha: 0.5);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$salutation,', style: AppTypography.textTheme.titleLarge?.copyWith(color: muted)),
+        const SizedBox(height: 2),
+        // Prénom souligné en doré sur 70 % de sa largeur, comme les titres des écrans de connexion.
+        IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                firstName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.textTheme.displayLarge?.copyWith(fontSize: 34, letterSpacing: -0.8),
+              ),
+              const SizedBox(height: 2),
+              FractionallySizedBox(
+                widthFactor: 0.7,
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.orAfricain,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
+              ),
             ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text('Prêt à célébrer ?', style: AppTypography.textTheme.bodyLarge?.copyWith(color: muted)),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title, this.actionLabel, this.onAction});
+
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(title, style: AppTypography.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+        ),
+        if (actionLabel != null)
+          GestureDetector(
+            onTap: onAction,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+              child: Text(
+                actionLabel!,
+                style: AppTypography.textTheme.labelLarge?.copyWith(color: AppColors.violetRoyal),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─── Carrousel d'événements ──────────────────────────────────────────────────
+
+class _EventsCarousel extends StatefulWidget {
+  const _EventsCarousel({
+    required this.events,
+    required this.horizontalPadding,
+    this.onOpen,
+    this.onCreate,
+  });
+
+  final List<RecentEvent> events;
+  final double horizontalPadding;
+  final ValueChanged<RecentEvent>? onOpen;
+  final VoidCallback? onCreate;
+
+  @override
+  State<_EventsCarousel> createState() => _EventsCarouselState();
+}
+
+class _EventsCarouselState extends State<_EventsCarousel> {
+  PageController? _controller;
+  double _fraction = 0;
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  PageController _controllerFor(double fraction) {
+    if (_controller == null || _fraction != fraction) {
+      _controller?.dispose();
+      _fraction = fraction;
+      _controller = PageController(viewportFraction: fraction, initialPage: _page);
+    }
+    return _controller!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.events.length + 1; // + carte « Nouvel événement »
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        // Une carte principale bien visible + un aperçu de la suivante.
+        final cardWidth = math.min(width - 2 * widget.horizontalPadding - 40, 420.0);
+        final fraction = (cardWidth / width).clamp(0.4, 0.92);
+        final height = (cardWidth * 1.05).clamp(250.0, 400.0);
+        final controller = _controllerFor(fraction);
+
+        return Column(
+          children: [
+            SizedBox(
+              height: height,
+              child: PageView.builder(
+                controller: controller,
+                padEnds: false,
+                itemCount: count,
+                onPageChanged: (i) => setState(() => _page = i),
+                itemBuilder: (context, index) {
+                  final card = index < widget.events.length
+                      ? _EventCard(
+                          event: widget.events[index],
+                          onTap: () => widget.onOpen?.call(widget.events[index]),
+                        )
+                      : _NewEventCard(onTap: widget.onCreate);
+                  // Les cartes voisines sont légèrement réduites : effet de profondeur.
+                  return AnimatedBuilder(
+                    animation: controller,
+                    builder: (context, child) {
+                      var delta = (index - _page).toDouble();
+                      if (controller.hasClients && controller.position.haveDimensions) {
+                        delta = index - (controller.page ?? _page.toDouble());
+                      }
+                      final scale = 1 - (delta.abs() * 0.06).clamp(0.0, 0.06);
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          left: index == 0 ? widget.horizontalPadding : 6,
+                          right: index == count - 1 ? widget.horizontalPadding : 6,
+                        ),
+                        child: Transform.scale(scale: scale, child: child),
+                      );
+                    },
+                    child: card,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _PageDots(count: count, current: _page),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PageDots extends StatelessWidget {
+  const _PageDots({required this.count, required this.current});
+
+  final int count;
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: i == current ? 22 : 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: i == current ? AppColors.orAfricain : AppColors.noirDoux.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppRadius.full),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _EventCard extends StatelessWidget {
+  const _EventCard({required this.event, this.onTap});
+
+  final RecentEvent event;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _EventStatus.fromDb(event.status);
+    final logo = event.logoUrl;
+    final date = event.eventDate;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (logo != null && logo.isNotEmpty)
+              CachedNetworkImage(
+                imageUrl: logo,
+                fit: BoxFit.cover,
+                errorWidget: (_, _, _) => const _CardPattern(),
+              )
+            else
+              const _CardPattern(),
+            // Dégradé sombre en bas pour garder le texte lisible sur n'importe quelle photo.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.35, 1],
+                  colors: [Colors.transparent, Color(0xD9140A24)],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 16,
+              left: 16,
+              child: _GlassChip(label: status.label, dotColor: status.color),
+            ),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.textTheme.displayMedium?.copyWith(
+                      color: Colors.white,
+                      fontSize: 24,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      if (date != null) _InfoTag(icon: Icons.event_rounded, label: formatEventDateShort(date)),
+                      if (event.place.isNotEmpty) _InfoTag(icon: Icons.place_rounded, label: event.place),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Fond violet texturé (lignes topographiques) pour les événements sans photo.
+class _CardPattern extends StatelessWidget {
+  const _CardPattern();
+
+  @override
+  Widget build(BuildContext context) {
+    return const CustomPaint(painter: BrandHeaderPainter());
+  }
+}
+
+class _GlassChip extends StatelessWidget {
+  const _GlassChip({required this.label, required this.dotColor});
+
+  final String label;
+  final Color dotColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 7, height: 7, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppTypography.textTheme.labelMedium?.copyWith(color: AppColors.noirDoux),
           ),
         ],
       ),
@@ -238,71 +654,514 @@ class _HomeHeader extends StatelessWidget {
   }
 }
 
-// ─── Carte Créer un événement ─────────────────────────────────────────────────
-class _CreateEventCard extends StatelessWidget {
-  final VoidCallback? onTap;
-  const _CreateEventCard({this.onTap});
+class _InfoTag extends StatelessWidget {
+  const _InfoTag({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 180,
-        decoration: BoxDecoration(
-          color: AppColors.violetRoyal,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.textTheme.labelMedium?.copyWith(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewEventCard extends StatelessWidget {
+  const _NewEventCard({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(28),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          // Le texte garde toute la largeur ; si la carte manque de hauteur
+          // (petit écran, texte agrandi), l'ensemble se réduit au lieu de déborder.
+          child: LayoutBuilder(
+            builder: (context, constraints) => Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: const BoxDecoration(color: AppColors.violetRoyal, shape: BoxShape.circle),
+                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Nouvel événement',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Créez une invitation en quelques minutes',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.noirDoux.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Grande carte d'accueil quand l'utilisateur n'a encore aucun événement.
+class _FirstEventCard extends StatelessWidget {
+  const _FirstEventCard({this.onCreate});
+
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Stack(
+        children: [
+          const Positioned.fill(child: _CardPattern()),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Créez votre premier événement',
+                        style: AppTypography.textTheme.displayMedium?.copyWith(color: Colors.white),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      FilledButton(
+                        onPressed: onCreate,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.violetRoyal,
+                          shape: const StadiumBorder(),
+                        ),
+                        child: const Text('Commencer'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Image.asset(AppAssets.mascotCreateEvent, height: 130, fit: BoxFit.contain),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Chiffres clés ───────────────────────────────────────────────────────────
+
+class _StatsCard extends StatelessWidget {
+  const _StatsCard({required this.data});
+
+  final HomeDashboardData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final unlimited = data.hasUnlimitedEvents;
+    final max = data.maxEvents ?? 0;
+    final progress = unlimited || max == 0 ? 1.0 : (data.quotaUsed / max).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 92,
+            height: 92,
+            child: CustomPaint(
+              painter: _RingPainter(progress: progress),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      unlimited ? '∞' : '${data.quotaUsed}/$max',
+                      style: AppTypography.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      'quota',
+                      style: AppTypography.textTheme.labelSmall?.copyWith(
+                        color: AppColors.noirDoux.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _StatLine(value: data.invitesDispatched, label: 'invitations envoyées'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1, color: AppColors.noirDoux.withValues(alpha: 0.07)),
+                ),
+                _StatLine(value: data.guestsConfirmed, label: 'invités confirmés'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatLine extends StatelessWidget {
+  const _StatLine({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text('$value', style: AppTypography.textTheme.displayMedium?.copyWith(fontSize: 26)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 2,
+            style: AppTypography.textTheme.bodyMedium?.copyWith(
+              color: AppColors.noirDoux.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  const _RingPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 10.0;
+    final rect = Offset.zero & size;
+    final arcRect = rect.deflate(stroke / 2);
+
+    canvas.drawArc(
+      arcRect,
+      0,
+      2 * math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = AppColors.violetRoyal.withValues(alpha: 0.10),
+    );
+    if (progress > 0) {
+      canvas.drawArc(
+        arcRect,
+        -math.pi / 2,
+        2 * math.pi * progress,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round
+          // Du violet vers l'or, en partant du haut de l'anneau.
+          ..shader = SweepGradient(
+            startAngle: -math.pi / 2,
+            endAngle: 3 * math.pi / 2,
+            colors: const [AppColors.violetRoyal, AppColors.violetRoyalAlt, AppColors.orAfricain],
+            stops: [0, (progress * 0.55).clamp(0.01, 0.99), progress.clamp(0.02, 1.0)],
+          ).createShader(rect),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter oldDelegate) => oldDelegate.progress != progress;
+}
+
+String _formatFcfa(int amount) => '${NumberFormat.decimalPattern('fr').format(amount)} F';
+
+void _openOffers(BuildContext context) => Navigator.of(context).pushNamed('/subscription');
+
+/// Offre actuelle. Compte gratuit : grande carte violette avec l'incitation à
+/// passer à Essentiel. Compte payant : rappel discret de l'offre.
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({required this.data});
+
+  final HomeDashboardData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final planName = data.planName ?? 'Découverte';
+    if (data.accountType == 'gratuit') {
+      final price = data.essentielPriceFcfa;
+      final max = data.maxEvents;
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(28),
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
-            // Texte + bouton à gauche
-            Positioned(
-              left: AppSpacing.lg,
-              bottom: AppSpacing.lg,
-              right: 150,
+            const Positioned.fill(child: _CardPattern()),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    'Créer un\névénement',
-                    style: AppTypography.textTheme.displayMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      height: 1.1,
-                    ),
+                  Row(
+                    children: [
+                      const _CrownBadge(),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Offre $planName',
+                              style: AppTypography.textTheme.titleLarge?.copyWith(color: Colors.white),
+                            ),
+                            if (max != null)
+                              Text(
+                                '${data.quotaUsed} sur $max événements utilisés',
+                                style: AppTypography.textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
+                  Text(
+                    'Événements illimités, plus d’invités et toutes les fonctionnalités avec Essentiel.',
+                    style: AppTypography.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      height: 1.4,
                     ),
-                    child: Text(
-                      'Commencer',
-                      style: AppTypography.textTheme.bodySmall?.copyWith(
-                        color: AppColors.violetRoyal,
-                        fontWeight: FontWeight.w700,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => _openOffers(context),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.orAfricain,
+                        foregroundColor: AppColors.noirDoux,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: const StadiumBorder(),
+                        textStyle: AppTypography.textTheme.titleSmall,
+                      ),
+                      child: Text(
+                        price != null ? 'Passer à Essentiel · ${_formatFcfa(price)}' : 'Passer à Essentiel',
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            // Illustration débordante à droite
-            Positioned(
-              right: -45,
-              bottom: 0,
-              child: Image.asset(
-                'assets/images/illustrations/invyra_event_asset.png',
-                height: 175,
-                fit: BoxFit.contain,
-              ),
-            ),
           ],
+        ),
+      );
+    }
+
+    final subtitle = data.accountType == 'flex'
+        ? 'Vous ne payez que les invités dont vous avez besoin'
+        : 'Événements illimités';
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(28),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: () => _openOffers(context),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              const _CrownBadge(),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Offre $planName', style: AppTypography.textTheme.titleMedium),
+                    Text(
+                      subtitle,
+                      style: AppTypography.textTheme.bodySmall?.copyWith(
+                        color: AppColors.noirDoux.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'Gérer',
+                style: AppTypography.textTheme.labelLarge?.copyWith(color: AppColors.violetRoyal),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CrownBadge extends StatelessWidget {
+  const _CrownBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(color: AppColors.orAfricain, shape: BoxShape.circle),
+      child: const Icon(Icons.workspace_premium_rounded, color: AppColors.violetRoyal, size: 24),
+    );
+  }
+}
+
+/// Packs d'invités à l'unité, prix en étiquette dorée.
+class _PacksSection extends StatelessWidget {
+  const _PacksSection({required this.packs, required this.horizontalPadding});
+
+  final List<HomeFlexPack> packs;
+  final double horizontalPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: const _SectionTitle(title: 'Besoin de plus d’invités ?'),
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: Text(
+            'Ajoutez un pack à n’importe quel événement, sans abonnement.',
+            style: AppTypography.textTheme.bodyMedium?.copyWith(
+              color: AppColors.noirDoux.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: Row(
+            children: [
+              for (final pack in packs) ...[
+                _PackCard(pack: pack),
+                if (pack != packs.last) const SizedBox(width: AppSpacing.sm),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PackCard extends StatelessWidget {
+  const _PackCard({required this.pack});
+
+  final HomeFlexPack pack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => _openOffers(context),
+        child: Container(
+          width: 140,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.groups_rounded, color: AppColors.violetRoyal),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                NumberFormat.decimalPattern('fr').format(pack.guestLimit),
+                style: AppTypography.textTheme.displayMedium,
+              ),
+              Text(
+                'invités',
+                style: AppTypography.textTheme.bodySmall?.copyWith(
+                  color: AppColors.noirDoux.withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.orAfricain.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Text(_formatFcfa(pack.priceFcfa), style: AppTypography.textTheme.labelMedium),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -346,331 +1205,15 @@ class _HomeErrorView extends StatelessWidget {
   }
 }
 
-class _StatsSection extends StatelessWidget {
-  final int activeEvents;
-  final int invitesDispatched;
+enum _EventStatus {
+  upcoming('À venir', AppColors.info),
+  running('En cours', AppColors.warning),
+  done('Terminé', AppColors.success);
 
-  const _StatsSection({
-    required this.activeEvents,
-    required this.invitesDispatched,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            icon: Icons.event_available_rounded,
-            label: 'Événements actifs',
-            value: activeEvents.toString(),
-            color: AppColors.violetRoyal,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.send_rounded,
-            label: 'Invitations envoyées',
-            value: invitesDispatched.toString(),
-            color: AppColors.info,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
   final String label;
-  final String value;
   final Color color;
 
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: AppTypography.textTheme.titleMedium?.copyWith(
-                    color: AppColors.noirDoux,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  label,
-                  maxLines: 2,
-                  style: AppTypography.textTheme.bodySmall?.copyWith(
-                    color: AppColors.noirDoux.withValues(alpha: 0.55),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlansButton extends StatelessWidget {
-  const _PlansButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: () => Navigator.of(context).pushNamed('/subscription'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.orAfricain,
-          side: const BorderSide(color: AppColors.orAfricain, width: 1.5),
-          backgroundColor: AppColors.orAfricain.withValues(alpha: 0.04),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.workspace_premium_rounded, size: 18),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              'Voir les offres d\'abonnement',
-              style: AppTypography.textTheme.bodyMedium?.copyWith(
-                color: AppColors.orAfricain,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EventListSection extends StatelessWidget {
-  final List<RecentEvent> events;
-  final VoidCallback? onSeeAll;
-
-  const _EventListSection({required this.events, this.onSeeAll});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // En-tête de section — titre + lien "Voir plus"
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Événements récents',
-                style: AppTypography.textTheme.titleMedium?.copyWith(
-                  color: AppColors.noirDoux,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: onSeeAll,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.violetRoyal,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('Voir plus'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        if (events.isEmpty)
-          const _EmptyEventsPlaceholder()
-        else
-          for (final event in events) ...[
-            _EventListTile(event: event),
-            if (event != events.last) const SizedBox(height: AppSpacing.xs),
-          ],
-      ],
-    );
-  }
-}
-
-class _EmptyEventsPlaceholder extends StatelessWidget {
-  const _EmptyEventsPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Center(
-            child: Image.asset(
-              AppAssets.mascotWelcome,
-              height: AppSpacing.xxl + AppSpacing.lg,
-              fit: BoxFit.contain,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Créez votre premier événement !',
-            textAlign: TextAlign.center,
-            style: AppTypography.textTheme.bodyMedium?.copyWith(
-              color: AppColors.noirDoux.withValues(alpha: 0.72),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EventListTile extends StatelessWidget {
-  final RecentEvent event;
-
-  const _EventListTile({required this.event});
-
-  @override
-  Widget build(BuildContext context) {
-    final status = _EventStatus.fromDb(event.status);
-
-    return InkWell(
-      onTap: () => pushProtectedRoute(
-        context,
-        EventDetailScreen(eventId: event.id),
-      ),
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            EventThumbnail(logoUrl: event.logoUrl, size: 48),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.noirDoux,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        color: AppColors.noirDoux.withValues(alpha: 0.45),
-                        size: 11,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        formatEventDateShort(event.eventDate),
-                        style: AppTypography.textTheme.bodySmall?.copyWith(
-                          color: AppColors.noirDoux.withValues(alpha: 0.55),
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Icon(
-                        Icons.place_outlined,
-                        color: AppColors.noirDoux.withValues(alpha: 0.45),
-                        size: 11,
-                      ),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          event.place,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.textTheme.bodySmall?.copyWith(
-                            color: AppColors.noirDoux.withValues(alpha: 0.55),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-              decoration: BoxDecoration(
-                color: status.backgroundColor,
-                borderRadius: BorderRadius.circular(AppRadius.full),
-              ),
-              child: Text(
-                status.label,
-                style: AppTypography.textTheme.labelSmall?.copyWith(
-                  color: status.foregroundColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.noirDoux.withValues(alpha: 0.25),
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum _EventStatus {
-  upcoming('À venir'),
-  running('En cours'),
-  done('Terminé');
-
-  final String label;
-
-  const _EventStatus(this.label);
+  const _EventStatus(this.label, this.color);
 
   factory _EventStatus.fromDb(String value) {
     switch (value.toLowerCase()) {
@@ -681,28 +1224,6 @@ enum _EventStatus {
         return _EventStatus.done;
       default:
         return _EventStatus.upcoming;
-    }
-  }
-
-  Color get backgroundColor {
-    switch (this) {
-      case _EventStatus.upcoming:
-        return AppColors.info.withValues(alpha: 0.12);
-      case _EventStatus.running:
-        return AppColors.warning.withValues(alpha: 0.12);
-      case _EventStatus.done:
-        return AppColors.success.withValues(alpha: 0.12);
-    }
-  }
-
-  Color get foregroundColor {
-    switch (this) {
-      case _EventStatus.upcoming:
-        return AppColors.info;
-      case _EventStatus.running:
-        return AppColors.warning;
-      case _EventStatus.done:
-        return AppColors.success;
     }
   }
 }

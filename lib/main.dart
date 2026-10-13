@@ -10,6 +10,7 @@ import 'core/auth/auth_session.dart';
 import 'core/config/supabase_config.dart';
 import 'core/services/device_link_service.dart';
 import 'core/constants/app_constants.dart';
+import 'core/theme/app_system_ui.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
@@ -28,6 +29,7 @@ void _navigateTo(String routeName) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppSystemUi.enableEdgeToEdge();
 
   await dotenv.load(fileName: '.env');
 

@@ -358,27 +358,29 @@ class _NotificationsHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              InkWell(
-                onTap: onReadAll,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
-                  child: Text(
-                    'Tout lire',
-                    style: AppTypography.textTheme.bodySmall?.copyWith(
-                      color: AppColors.violetRoyal,
-                      fontWeight: FontWeight.w700,
-                    ),
+              // Icône plutôt que texte : la largeur ne dépend ni de la police
+              // ni de la taille de texte choisie dans les réglages du téléphone.
+              Tooltip(
+                message: 'Tout marquer comme lu',
+                child: InkWell(
+                  onTap: onReadAll,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: const Padding(
+                    padding: EdgeInsets.all(AppSpacing.xs),
+                    child: Icon(Icons.done_all_rounded, color: AppColors.violetRoyal, size: AppSpacing.lg),
                   ),
                 ),
               ),
               if (onDeleteAll != null)
-                InkWell(
-                  onTap: onDeleteAll,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xs),
-                    child: Icon(Icons.delete_sweep_outlined, color: AppColors.error, size: AppSpacing.lg),
+                Tooltip(
+                  message: 'Tout supprimer',
+                  child: InkWell(
+                    onTap: onDeleteAll,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: const Padding(
+                      padding: EdgeInsets.all(AppSpacing.xs),
+                      child: Icon(Icons.delete_sweep_outlined, color: AppColors.error, size: AppSpacing.lg),
+                    ),
                   ),
                 ),
             ],
