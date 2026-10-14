@@ -1,12 +1,16 @@
 import 'dart:typed_data';
 
+import 'package:package_info_plus/package_info_plus.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/auth/auth_gate.dart';
 import '../core/constants/app_constants.dart';
+import '../core/config/release_config.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
@@ -137,12 +141,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   const _SettingsMenu(),
+                  const SizedBox(height: AppSpacing.lg),
+                  const _AppVersionLabel(),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Version de l'app ────────────────────────────────────────────────────────
+
+class _AppVersionLabel extends StatelessWidget {
+  const _AppVersionLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final info = snapshot.data;
+        if (info == null) return const SizedBox.shrink();
+        final channel = ReleaseConfig.channel == 'stable' ? '' : ' · ${ReleaseConfig.channel}';
+        return Center(
+          child: Text(
+            '${info.appName} ${info.version} (${info.buildNumber})$channel',
+            style: AppTypography.textTheme.bodySmall?.copyWith(
+              color: AppColors.noirDoux.withValues(alpha: 0.45),
+            ),
+          ),
+        );
+      },
     );
   }
 }
