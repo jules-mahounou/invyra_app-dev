@@ -1,20 +1,32 @@
 name: Build APK
 
-# Se déclenche uniquement sur un push de branche (pas sur un push de tag,
-# pour éviter que la release créée plus bas ne redéclenche ce workflow en boucle).
+# - PR            → analyse + build de contrôle (rien n'est publié).
+# - push branche  → canal "dev"    : release `dev-latest` réécrite à chaque push.
+# - push tag v*   → canal "stable" : release `vX.Y.Z` + release `stable-latest`.
+# Chaque release contient les APK + un `version.json` que l'app lit pour proposer
+# la mise à jour (voir lib/core/services/app_update_service.dart).
 on:
   push:
     branches:
       - '**'
+    tags:
+      - 'v*'
+  pull_request:
   workflow_dispatch:
 
-# Autorise ce workflow à créer/mettre à jour une release GitHub.
 permissions:
   contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Décalage pour que le numéro de build reste au-dessus de l'ancien `+3` du pubspec.
+      BUILD_NUMBER_OFFSET: 100
     steps:
       - name: Checkout du code
         uses: actions/checkout@v5
@@ -31,37 +43,129 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Déterminer le canal, la version et l'URL de mise à jour
+        id: meta
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            channel=stable
+          else
+            channel=dev
+          fi
+          version_name=$(grep -E '^version:' pubspec.yaml | sed -E 's/version:[[:space:]]*([^+]+).*/\1/')
+          if [[ "$channel" == stable ]]; then
+            version_name="${GITHUB_REF_NAME#v}"
+          fi
+          version_code=$((GITHUB_RUN_NUMBER + BUILD_NUMBER_OFFSET))
+          release_tag="${channel}-latest"
+          base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${release_tag}"
+          {
+            echo "channel=$channel"
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+            echo "release_tag=$release_tag"
+            echo "base_url=$base_url"
+            echo "sha_short=$(git rev-parse --short HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Générer le fichier .env à partir des secrets
         run: |
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
           echo "AUTH_REDIRECT_URL=${{ secrets.AUTH_REDIRECT_URL }}" >> .env
 
+      - name: Préparer la clé de signature
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEYSTORE_BASE64" ]]; then
+            echo "::warning::Secrets de signature absents : APK signé avec une clé de debug (les mises à jour par-dessus l'app installée échoueront)."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+          cat > android/key.properties <<EOF
+          storeFile=release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
       - name: Installer les dépendances
         run: flutter pub get
 
+      - name: Analyse du code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
       - name: Build de l'APK (release, un APK par architecture)
-        run: flutter build apk --release --split-per-abi
+        run: >
+          flutter build apk --release --split-per-abi
+          --build-name=${{ steps.meta.outputs.version_name }}
+          --build-number=${{ steps.meta.outputs.version_code }}
+          --dart-define=RELEASE_URL=${{ steps.meta.outputs.base_url }}/version.json
+          --dart-define=UPDATE_CHANNEL=${{ steps.meta.outputs.channel }}
 
-      - name: Récupérer le SHA court du commit
-        id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Renommer les APK et générer version.json
+        if: github.event_name != 'pull_request'
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          BASE_URL: ${{ steps.meta.outputs.base_url }}
+          CHANNEL: ${{ steps.meta.outputs.channel }}
+          VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+        run: |
+          mkdir -p dist
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "dist/invyra-${abi}.apk"
+          done
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          base = os.environ["BASE_URL"]
+          notes = (os.environ.get("COMMIT_MESSAGE") or "").strip().splitlines()
+          data = {
+              "channel": os.environ["CHANNEL"],
+              "versionName": os.environ["VERSION_NAME"],
+              "versionCode": int(os.environ["VERSION_CODE"]),
+              "commit": os.environ["GITHUB_SHA"],
+              "publishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "notes": notes[0] if notes else "",
+              "mandatory": False,
+              "apks": {abi: f"{base}/invyra-{abi}.apk" for abi in ("arm64-v8a", "armeabi-v7a", "x86_64")},
+          }
+          with open("dist/version.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          print(json.dumps(data, ensure_ascii=False, indent=2))
+          PY
 
-      - name: Publier/mettre à jour la release "dev-latest" avec l'APK
+      - name: Déplacer le tag du canal sur ce commit
+        if: github.event_name != 'pull_request'
+        run: |
+          git tag -f "${{ steps.meta.outputs.release_tag }}"
+          git push -f origin "refs/tags/${{ steps.meta.outputs.release_tag }}"
+
+      - name: Publier la release du canal (${{ steps.meta.outputs.release_tag }})
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: dev-latest
-          name: "Build de dev — ${{ steps.vars.outputs.sha_short }}"
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          name: "Invyra ${{ steps.meta.outputs.channel }} — ${{ steps.meta.outputs.version_name }} (${{ steps.meta.outputs.version_code }})"
           body: |
-            Build automatique généré depuis le commit ${{ github.sha }} (branche `${{ github.ref_name }}`).
-            Cette release est réécrite à chaque push : elle contient toujours le dernier APK buildé.
+            Build ${{ steps.meta.outputs.channel }} généré depuis le commit ${{ github.sha }} (`${{ github.ref_name }}`).
+            Cette release est réécrite à chaque build du canal : elle contient toujours le dernier APK.
 
-            Un APK par architecture (plus léger qu'un APK universel) :
-            - `app-arm64-v8a-release.apk` → quasi tous les téléphones Android depuis ~2018 (c'est celui-là qu'il te faut dans le doute).
-            - `app-armeabi-v7a-release.apk` → vieux téléphones 32 bits.
-            - `app-x86_64-release.apk` → émulateurs uniquement.
-          prerelease: true
-          files: |
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
+            - `invyra-arm64-v8a.apk` → quasi tous les téléphones Android récents (dans le doute, c'est celui-là).
+            - `invyra-armeabi-v7a.apk` → vieux téléphones 32 bits.
+            - `invyra-x86_64.apk` → émulateurs uniquement.
+          prerelease: ${{ steps.meta.outputs.channel != 'stable' }}
+          files: dist/*
+
+      - name: Publier la release versionnée
+        if: steps.meta.outputs.channel == 'stable'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Invyra ${{ steps.meta.outputs.version_name }}"
+          generate_release_notes: true
+          files: dist/*.apk

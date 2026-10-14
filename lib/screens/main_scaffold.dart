@@ -10,6 +10,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/widgets/app_loader.dart';
+import '../core/widgets/app_update_dialog.dart';
 import '../services/event_service.dart';
 import 'create_event_screen.dart';
 import 'events_screen.dart';
@@ -62,6 +63,9 @@ class _MainScaffoldState extends State<MainScaffold> {
     ) {
       _loadUnreadCount();
       _subscribeToNotifications();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkAndPromptAppUpdate(context);
     });
   }
 
