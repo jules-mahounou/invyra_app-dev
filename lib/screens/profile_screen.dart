@@ -1,7 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:package_info_plus/package_info_plus.dart';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,6 +14,7 @@ import '../core/theme/app_decorations.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/widgets/app_loader.dart';
+import '../core/widgets/app_update_dialog.dart';
 import '../services/event_service.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
@@ -167,11 +166,21 @@ class _AppVersionLabel extends StatelessWidget {
         if (info == null) return const SizedBox.shrink();
         final channel = ReleaseConfig.channel == 'stable' ? '' : ' · ${ReleaseConfig.channel}';
         return Center(
-          child: Text(
-            '${info.appName} ${info.version} (${info.buildNumber})$channel',
-            style: AppTypography.textTheme.bodySmall?.copyWith(
-              color: AppColors.noirDoux.withValues(alpha: 0.45),
-            ),
+          child: Column(
+            children: [
+              Text(
+                '${info.appName} ${info.version} (${info.buildNumber})$channel',
+                style: AppTypography.textTheme.bodySmall?.copyWith(
+                  color: AppColors.noirDoux.withValues(alpha: 0.45),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => checkAndPromptAppUpdate(context, manual: true),
+                icon: const Icon(Icons.system_update_rounded, size: 18),
+                label: const Text('Rechercher une mise à jour'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.violetRoyal),
+              ),
+            ],
           ),
         );
       },

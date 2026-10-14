@@ -8,16 +8,34 @@ import '../services/app_update_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
+bool _updateCheckRunning = false;
+
 /// Vérifie s'il existe une nouvelle version et, si oui, affiche la fenêtre.
-/// À appeler une fois l'écran principal affiché ; silencieux en cas d'échec.
-Future<void> checkAndPromptAppUpdate(BuildContext context) async {
-  final info = await AppUpdateService().checkForUpdate();
-  if (info == null || !context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: !info.mandatory,
-    builder: (_) => AppUpdateDialog(info: info),
-  );
+/// Appelée au démarrage et au retour dans l'app (silencieuse en cas d'échec),
+/// ou depuis le Profil avec [manual] = true pour afficher aussi « à jour » / l'erreur.
+Future<void> checkAndPromptAppUpdate(BuildContext context, {bool manual = false}) async {
+  if (_updateCheckRunning) return;
+  _updateCheckRunning = true;
+  try {
+    final result = await AppUpdateService().checkForUpdate();
+    if (!context.mounted) return;
+    final info = result.update;
+    if (info == null) {
+      if (manual) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.error ?? 'Vous avez déjà la dernière version.')),
+        );
+      }
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !info.mandatory,
+      builder: (_) => AppUpdateDialog(info: info),
+    );
+  } finally {
+    _updateCheckRunning = false;
+  }
 }
 
 class AppUpdateDialog extends StatefulWidget {

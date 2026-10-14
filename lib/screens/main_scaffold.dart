@@ -35,7 +35,7 @@ class MainScaffold extends StatefulWidget {
   State<MainScaffold> createState() => _MainScaffoldState();
 }
 
-class _MainScaffoldState extends State<MainScaffold> {
+class _MainScaffoldState extends State<MainScaffold> with WidgetsBindingObserver {
   final _profileService = UserProfileService();
   final _notificationsService = NotificationsService();
   final _eventService = EventService();
@@ -64,13 +64,23 @@ class _MainScaffoldState extends State<MainScaffold> {
       _loadUnreadCount();
       _subscribeToNotifications();
     });
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) checkAndPromptAppUpdate(context);
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android garde souvent l'app en mémoire : on revérifie à chaque retour.
+    if (state == AppLifecycleState.resumed && mounted) {
+      checkAndPromptAppUpdate(context);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _notificationsSubscription?.cancel();
     _authSubscription?.cancel();
     super.dispose();

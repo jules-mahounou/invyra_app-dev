@@ -27,40 +27,60 @@ class AppUpdateInfo {
   });
 }
 
+class AppUpdateCheckResult {
+  /// Mise à jour disponible, ou `null` si déjà à jour / vérification impossible.
+  final AppUpdateInfo? update;
+
+  /// Message lisible quand la vérification n'a pas pu se faire.
+  final String? error;
+
+  const AppUpdateCheckResult({this.update, this.error});
+}
+
 class AppUpdateService {
-  /// Retourne la mise à jour disponible, ou `null` (déjà à jour, hors Android,
-  /// build local ou réseau indisponible : on ne bloque jamais l'utilisateur).
-  Future<AppUpdateInfo?> checkForUpdate() async {
-    if (kIsWeb || !Platform.isAndroid || !ReleaseConfig.isEnabled) return null;
+  /// Ne lève jamais d'exception : on ne bloque jamais l'utilisateur.
+  Future<AppUpdateCheckResult> checkForUpdate() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      return const AppUpdateCheckResult(error: 'Mise à jour automatique disponible sur Android uniquement.');
+    }
+    if (!ReleaseConfig.isEnabled) {
+      return const AppUpdateCheckResult(error: 'Build local : mise à jour automatique désactivée.');
+    }
 
     try {
       final response = await http
           .get(Uri.parse(ReleaseConfig.releaseUrl))
           .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        return AppUpdateCheckResult(error: 'Serveur de mise à jour injoignable (${response.statusCode}).');
+      }
 
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       final remoteCode = (data['versionCode'] as num?)?.toInt() ?? 0;
 
       final package = await PackageInfo.fromPlatform();
       final currentCode = int.tryParse(package.buildNumber) ?? 0;
-      if (remoteCode <= currentCode) return null;
+      if (remoteCode <= currentCode) return const AppUpdateCheckResult();
 
       final apks = (data['apks'] as Map?)?.cast<String, dynamic>() ?? const {};
       final apkUrl = apks[_deviceAbi()] as String? ?? apks['arm64-v8a'] as String?;
-      if (apkUrl == null) return null;
+      if (apkUrl == null) {
+        return const AppUpdateCheckResult(error: 'Aucun APK compatible avec ce téléphone.');
+      }
 
-      return AppUpdateInfo(
+      return AppUpdateCheckResult(
+        update: AppUpdateInfo(
         versionName: data['versionName'] as String? ?? '',
         versionCode: remoteCode,
         currentVersionName: '${package.version} (${package.buildNumber})',
         notes: data['notes'] as String? ?? '',
         mandatory: data['mandatory'] as bool? ?? false,
-        apkUrl: apkUrl,
+          apkUrl: apkUrl,
+        ),
       );
     } catch (e) {
       debugPrint('Vérification de mise à jour impossible : $e');
-      return null;
+      return const AppUpdateCheckResult(error: 'Vérification impossible. Vérifiez votre connexion.');
     }
   }
 
