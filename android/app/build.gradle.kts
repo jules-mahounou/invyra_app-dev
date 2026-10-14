@@ -38,6 +38,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Builds de test (fork) : app séparée « Invyra Dev », installable à côté de la prod.
+        // La CI renseigne ces variables ; en prod (repo de Mendel) elles restent vides.
+        applicationIdSuffix = System.getenv("APP_ID_SUFFIX") ?: ""
+        manifestPlaceholders["appLabel"] = System.getenv("APP_LABEL") ?: "Invyra"
     }
 
     signingConfigs {

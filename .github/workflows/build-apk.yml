@@ -27,6 +27,9 @@ jobs:
     env:
       # Décalage pour que le numéro de build reste au-dessus de l'ancien `+3` du pubspec.
       BUILD_NUMBER_OFFSET: 100
+      # Hors du repo de Mendel (fork de test) : app séparée « Invyra Dev », signée avec la clé de test du fork.
+      APP_ID_SUFFIX: ${{ github.repository_owner != 'Mendel229' && '.dev' || '' }}
+      APP_LABEL: ${{ github.repository_owner != 'Mendel229' && 'Invyra Dev' || 'Invyra' }}
     steps:
       - name: Checkout du code
         uses: actions/checkout@v5
